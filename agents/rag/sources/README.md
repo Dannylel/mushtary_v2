@@ -14,8 +14,8 @@ the built index lives in `agents/rag/corpora/tender_kb/`. Edit/extend these, the
 ollama pull nomic-embed-text
 # Standard clause library:
 python -m agents.rag.index_documents agents/rag/sources/clauses --authority policy --rebuild
-# Procurement law (the buyer-provided PDF at project root):
-python -m agents.rag.index_documents Government_Tenders_and_Procurement_Law.pdf --authority law
+# Procurement law (the buyer-provided PDF, kept under docs/):
+python -m agents.rag.index_documents "docs/Government_Tenders_and_Procurement_Law.pdf" --authority law
 ```
 Use `--rebuild` on the FIRST command to start fresh; later commands append.
 

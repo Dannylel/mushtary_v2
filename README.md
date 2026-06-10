@@ -77,7 +77,7 @@ RAG fail-safe paths (no Ollama required).
 
 ```bash
 python -m agents.rag.index_documents agents/rag/sources/clauses --authority policy --rebuild
-python -m agents.rag.index_documents Government_Tenders_and_Procurement_Law.pdf --authority law
+python -m agents.rag.index_documents "docs/Government_Tenders_and_Procurement_Law.pdf" --authority law
 ```
 
 Only index human-approved material — never un-approved AI drafts.
