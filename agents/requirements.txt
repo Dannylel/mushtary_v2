@@ -1,0 +1,25 @@
+# ── Core ───────────────────────────────────────────────────────────────────────
+pydantic>=2.0.0
+python-dotenv>=1.0.0
+
+# ── LLM: local-first via LangChain/LangGraph (OpenAI-compatible, e.g. Ollama) ───
+langgraph>=0.2.0
+langchain-core>=0.3.0
+langchain-openai>=0.2.0
+openai>=1.40.0          # transitive (used by langchain-openai) + legacy make_client
+
+# ── Tender PDF rendering (main.py / run.py) ────────────────────────────────────
+fpdf2>=2.7.0
+
+# ── Document ingestion (SOW extractor) ─────────────────────────────────────────
+PyMuPDF>=1.23.0
+
+# ── RAG: local embeddings + flat vector store (agents/rag) ──────────────────────
+# Embeddings reuse the same local OpenAI-compatible endpoint (Ollama) as generation;
+# only the model differs (default: nomic-embed-text). numpy backs the cosine index.
+numpy>=1.24.0
+tqdm>=4.66.0
+
+# ── Async task queue (future FastAPI layer; optional for local CLI use) ────────
+celery[redis]>=5.3.0
+redis>=5.0.0

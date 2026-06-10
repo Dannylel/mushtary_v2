@@ -1,0 +1,68 @@
+{
+  "tender_id": "TND-2026-001",
+  "title": "Supply, Installation & Maintenance of IT Infrastructure — Data Center Upgrade",
+  "category": "Information Technology",
+  "subcategory": "IT Infrastructure",
+  "buyer_id": "BUYER-001",
+  "estimated_value_sar": 1500000,
+  "deadline_days": 90,
+  "policy": {
+    "technical_weight_percent": 70,
+    "financial_weight_percent": 30,
+    "pricing_approach": "best_value",
+    "output_detail": "detailed_with_justification",
+    "disqualification": {
+      "late_submission": true,
+      "missing_mandatory_docs": true,
+      "no_bid_security": false,
+      "non_compliant_format": true,
+      "fails_minimum_eligibility": true,
+      "legal_violations": true,
+      "conflict_of_interest": true,
+      "non_compliant_technical_specs": true,
+      "non_compliant_pricing": false,
+      "insufficient_experience": true,
+      "custom_criteria": [
+        "Vendor must have a physical presence or registered branch in Saudi Arabia"
+      ]
+    }
+  },
+  "criteria": [
+    {
+      "id": "EC-01",
+      "name": "Technical Compliance",
+      "description": "Degree to which the proposed solution meets all specified technical requirements including hardware specs, network architecture, and security standards (ISO 27001 required).",
+      "weight_percent": 30,
+      "mandatory": true
+    },
+    {
+      "id": "EC-02",
+      "name": "Relevant Experience",
+      "description": "Vendor must have completed at least 3 similar IT infrastructure projects in the last 5 years. Projects in Saudi Arabia or GCC region preferred.",
+      "weight_percent": 20,
+      "mandatory": true
+    },
+    {
+      "id": "EC-03",
+      "name": "Project Timeline & Delivery Plan",
+      "description": "Realism and detail of the proposed implementation timeline. Must complete within 90 calendar days.",
+      "weight_percent": 15,
+      "mandatory": false
+    },
+    {
+      "id": "EC-04",
+      "name": "Support & Maintenance Plan",
+      "description": "Quality of post-installation support: SLA commitments, response times, local support team availability.",
+      "weight_percent": 15,
+      "mandatory": false
+    },
+    {
+      "id": "EC-05",
+      "name": "Price Competitiveness",
+      "description": "Value for money assessment. Not lowest price — best value within the SAR 1.5M budget.",
+      "weight_percent": 20,
+      "mandatory": false
+    }
+  ],
+  "market_avg_price_sar": 1350000
+}

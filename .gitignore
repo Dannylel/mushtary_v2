@@ -1,0 +1,17 @@
+# Secrets / env
+.env
+*.env
+
+# Python bytecode caches
+__pycache__/
+*.pyc
+
+# Generated tender/evaluation artifacts
+/outputs/
+
+# RAG index build artifacts (rebuild from agents/rag/sources via index_documents)
+agents/rag/corpora/tender_kb/vectors.npy
+agents/rag/corpora/tender_kb/chunks.jsonl
+
+# Editor / OS
+.DS_Store

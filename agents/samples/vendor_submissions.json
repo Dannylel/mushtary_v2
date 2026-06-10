@@ -1,0 +1,154 @@
+{
+  "tender_id": "TND-2026-001",
+  "submissions": [
+    {
+      "vendor_id": "VND-001",
+      "vendor_name": "Alpha Tech Solutions",
+      "submission_id": "SUB-001",
+      "vri": {
+        "vendor_id": "VND-001",
+        "overall": 88.0,
+        "category_specific": 91.0,
+        "level": "elite_vendor",
+        "components": {
+          "performance_rating": 90,
+          "compliance_and_licenses": 95,
+          "institutional_verification": 85,
+          "delivery_performance": 88,
+          "financial_strength": 80,
+          "tender_success_rate": 82,
+          "contract_history": 90,
+          "ai_risk_signals": 95
+        }
+      },
+      "submission": {
+        "vendor_id": "VND-001",
+        "submission_id": "SUB-001",
+        "technical_response": "Alpha Tech Solutions proposes a comprehensive data center upgrade using Cisco UCS blade servers (latest generation), HPE Aruba networking with redundant core switches, and a Fortinet-based security stack certified to ISO 27001. Our solution includes full rack installation, structured cabling (Cat6A), UPS systems with 4-hour backup, and a cooling upgrade. We will deploy a private cloud layer using VMware vSphere 8 with vSAN storage providing 200TB usable capacity. All hardware meets Aramco and SABIC vendor approval standards. Our team of 12 certified engineers (CCIE, CISSP, PMP certified) will be on-site throughout the project.",
+        "commercial_summary": "Total project cost: SAR 1,280,000 inclusive of hardware, installation, and 2-year maintenance. Payment terms: 30% on PO, 40% on delivery, 30% on sign-off.",
+        "proposed_price_sar": 1280000,
+        "declared_experience_years": 12,
+        "certifications": ["ISO 27001", "ISO 9001", "CCIE", "CISSP", "PMP", "Cisco Gold Partner", "VMware Partner"],
+        "submitted_doc_types": [
+          "commercial_registration",
+          "vat_certificate",
+          "iso_certificate",
+          "saudization_certificate",
+          "past_project_references",
+          "bid_security_bank_guarantee"
+        ],
+        "timeline_commitment_days": 75
+      }
+    },
+    {
+      "vendor_id": "VND-002",
+      "vendor_name": "Gulf Systems & Networks",
+      "submission_id": "SUB-002",
+      "vri": {
+        "vendor_id": "VND-002",
+        "overall": 74.0,
+        "category_specific": 78.0,
+        "level": "trusted_vendor",
+        "components": {
+          "performance_rating": 78,
+          "compliance_and_licenses": 80,
+          "institutional_verification": 60,
+          "delivery_performance": 72,
+          "financial_strength": 70,
+          "tender_success_rate": 68,
+          "contract_history": 75,
+          "ai_risk_signals": 82
+        }
+      },
+      "submission": {
+        "vendor_id": "VND-002",
+        "submission_id": "SUB-002",
+        "technical_response": "Gulf Systems & Networks will supply and install a Dell PowerEdge server cluster with Juniper networking equipment. We propose a hyper-converged infrastructure (HCI) approach using Nutanix, providing simplified management and built-in redundancy. Security will be handled by Palo Alto NGFWs. Our team has completed 5 similar projects in Saudi Arabia and the UAE over the past 4 years. We hold ISO 27001 certification and are an authorised Nutanix partner. Local support team based in Riyadh with 4-hour on-site SLA.",
+        "commercial_summary": "Total project cost: SAR 1,420,000. This includes hardware procurement, installation, configuration, staff training, and 1-year warranty support. Extended maintenance available at SAR 120,000/year.",
+        "proposed_price_sar": 1420000,
+        "declared_experience_years": 7,
+        "certifications": ["ISO 27001", "Nutanix Partner", "Palo Alto Certified"],
+        "submitted_doc_types": [
+          "commercial_registration",
+          "vat_certificate",
+          "iso_certificate",
+          "past_project_references"
+        ],
+        "timeline_commitment_days": 85
+      }
+    },
+    {
+      "vendor_id": "VND-003",
+      "vendor_name": "Riyadh Digital Services",
+      "submission_id": "SUB-003",
+      "vri": {
+        "vendor_id": "VND-003",
+        "overall": 55.0,
+        "category_specific": 52.0,
+        "level": "verified_vendor",
+        "components": {
+          "performance_rating": 60,
+          "compliance_and_licenses": 65,
+          "institutional_verification": 40,
+          "delivery_performance": 55,
+          "financial_strength": 50,
+          "tender_success_rate": 45,
+          "contract_history": 55,
+          "ai_risk_signals": 70
+        }
+      },
+      "submission": {
+        "vendor_id": "VND-003",
+        "submission_id": "SUB-003",
+        "technical_response": "We propose to supply generic brand servers and networking equipment to meet the budget. Our team can install the hardware and configure basic networking. We have done similar work for small offices and a few medium-sized companies. We can complete within 90 days. We will provide support via phone and email.",
+        "commercial_summary": "Total cost: SAR 890,000. We offer the most competitive price in the market.",
+        "proposed_price_sar": 890000,
+        "declared_experience_years": 3,
+        "certifications": [],
+        "submitted_doc_types": [
+          "commercial_registration"
+        ],
+        "timeline_commitment_days": 90
+      }
+    },
+    {
+      "vendor_id": "VND-004",
+      "vendor_name": "TechBridge International",
+      "submission_id": "SUB-004",
+      "vri": {
+        "vendor_id": "VND-004",
+        "overall": 81.0,
+        "category_specific": 83.0,
+        "level": "strategic_vendor",
+        "components": {
+          "performance_rating": 84,
+          "compliance_and_licenses": 88,
+          "institutional_verification": 75,
+          "delivery_performance": 80,
+          "financial_strength": 78,
+          "tender_success_rate": 76,
+          "contract_history": 80,
+          "ai_risk_signals": 88
+        }
+      },
+      "submission": {
+        "vendor_id": "VND-004",
+        "submission_id": "SUB-004",
+        "technical_response": "TechBridge International proposes a modular, scalable IT infrastructure solution based on HPE ProLiant Gen11 servers and Aruba CX switching fabric. Our design incorporates N+1 redundancy at every layer, 25GbE server connectivity, and a software-defined networking (SDN) overlay for future flexibility. Security architecture includes CrowdStrike EDR, Zscaler ZTNA, and Fortinet NGFW — all aligned with NIST and ISO 27001 frameworks. We have delivered 8 enterprise data center projects in KSA (references available), including 2 government-sector projects. Our KSA-based delivery team comprises 18 engineers. 24/7 NOC support with 2-hour on-site SLA.",
+        "commercial_summary": "Total project value: SAR 1,380,000 (hardware: SAR 950,000, professional services: SAR 280,000, 2-year managed support: SAR 150,000). Payment milestones aligned with project phases.",
+        "proposed_price_sar": 1380000,
+        "declared_experience_years": 9,
+        "certifications": ["ISO 27001", "ISO 9001", "ITIL v4", "HPE Partner", "CrowdStrike Partner", "PMP"],
+        "submitted_doc_types": [
+          "commercial_registration",
+          "vat_certificate",
+          "iso_certificate",
+          "saudization_certificate",
+          "past_project_references",
+          "financial_statements"
+        ],
+        "timeline_commitment_days": 80
+      }
+    }
+  ]
+}
