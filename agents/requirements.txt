@@ -20,6 +20,11 @@ PyMuPDF>=1.23.0
 numpy>=1.24.0
 tqdm>=4.66.0
 
-# ── Async task queue (future FastAPI layer; optional for local CLI use) ────────
+# ── Demo web UI (FastAPI layer behind the frontend/ console) ───────────────────
+fastapi>=0.110.0
+uvicorn>=0.27.0
+python-multipart>=0.0.9      # file uploads (SOW PDF, etc.)
+
+# ── Async task queue (future production layer; optional for local CLI use) ─────
 celery[redis]>=5.3.0
 redis>=5.0.0

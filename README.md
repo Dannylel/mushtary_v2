@@ -35,7 +35,20 @@ pip install -r agents/requirements.txt
 Configuration lives in `agents/llm_config.py` and `agents/rag/config.py` — env overrides:
 `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY`, `RAG_EMBED_MODEL`.
 
-## Run
+## Demo web console (recommended)
+
+A local web UI to exercise every agent — drafting, PDF extraction, vendor validation,
+evaluation/ranking, and knowledge-base search:
+
+```bash
+python api.py            # then open http://localhost:8000
+```
+
+The UI (`frontend/`) talks to a thin FastAPI layer (`api.py`). Long agent runs execute as
+background jobs with live progress; nothing leaves the machine. Not a production app — no auth
+or DB; it's a demo/testing surface.
+
+## Run (CLI)
 
 ```bash
 python run.py                                   # full pipeline, AI invents the buyer form

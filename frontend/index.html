@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mushtary — AI Procurement Console</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">M</div>
+        <div>
+          <div class="brand-name">Mushtary</div>
+          <div class="brand-sub">AI Procurement</div>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <button class="nav-item active" data-view="overview"><span class="ico">◆</span> Overview</button>
+        <button class="nav-item" data-view="draft"><span class="ico">✎</span> Draft Tender</button>
+        <button class="nav-item" data-view="extract"><span class="ico">⬆</span> Extract from PDF</button>
+        <button class="nav-item" data-view="validate"><span class="ico">✓</span> Vendor Validation</button>
+        <button class="nav-item" data-view="evaluate"><span class="ico">★</span> Evaluate &amp; Rank</button>
+        <button class="nav-item" data-view="kb"><span class="ico">⌕</span> Knowledge Base</button>
+      </nav>
+
+      <div class="sidebar-foot">
+        <div class="rule-card">
+          <div class="rule-title">Governance rule</div>
+          AI generates → Human reviews → Human approves → Action taken.
+          <span class="muted">Every output is a DRAFT.</span>
+        </div>
+        <div class="env" id="envBox">
+          <div class="env-row"><span>Model</span><b id="envModel">…</b></div>
+          <div class="env-row"><span>Embeddings</span><b id="envEmbed">…</b></div>
+          <div class="env-row"><span>Knowledge base</span><b id="envKb">…</b></div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+      <!-- OVERVIEW -->
+      <section class="view active" id="view-overview">
+        <header class="page-head">
+          <h1>AI Procurement Console</h1>
+          <p>A local, fully on-device demo of the Mushtary tendering agents. Nothing leaves this machine.</p>
+        </header>
+        <div class="grid cards">
+          <div class="card feature" data-go="draft">
+            <div class="feat-ico">✎</div>
+            <h3>Draft Tender</h3>
+            <p>Turn a one-line idea into a full RFP — four AI sections drafted in parallel and grounded on a clause library + Saudi procurement law.</p>
+            <span class="link">Open →</span>
+          </div>
+          <div class="card feature" data-go="extract">
+            <div class="feat-ico">⬆</div>
+            <h3>Extract from PDF</h3>
+            <p>Upload a Scope of Work / RFP and the AI reads it into a structured buyer form — no manual re-typing.</p>
+            <span class="link">Open →</span>
+          </div>
+          <div class="card feature" data-go="validate">
+            <div class="feat-ico">✓</div>
+            <h3>Vendor Validation</h3>
+            <p>Check a vendor registration through a 4-tool reasoning loop: registry, duplicates, category fit, documents.</p>
+            <span class="link">Open →</span>
+          </div>
+          <div class="card feature" data-go="evaluate">
+            <div class="feat-ico">★</div>
+            <h3>Evaluate &amp; Rank</h3>
+            <p>Score each bid in isolation, then rank with an explainable recommendation for the buyer.</p>
+            <span class="link">Open →</span>
+          </div>
+          <div class="card feature" data-go="kb">
+            <div class="feat-ico">⌕</div>
+            <h3>Knowledge Base</h3>
+            <p>Search the RAG corpus the drafting agents rely on — clauses and procurement-law articles.</p>
+            <span class="link">Open →</span>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-num" id="kbCount">—</div>
+            <div class="stat-label">indexed knowledge chunks</div>
+            <div class="stat-foot">clause library + Saudi procurement law</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- DRAFT -->
+      <section class="view" id="view-draft">
+        <header class="page-head">
+          <h1>Draft a Tender</h1>
+          <p>The autonomous pipeline invents a realistic buyer brief from your topic, then drafts the full RFP.</p>
+        </header>
+        <div class="panel">
+          <label class="field-label">Tender topic / seed <span class="muted">(optional — leave blank for a random realistic tender)</span></label>
+          <div class="row">
+            <input id="draftSeed" class="input" placeholder="e.g. hospital MRI machine supply and installation" />
+            <button id="draftBtn" class="btn primary">Generate Draft</button>
+          </div>
+          <div class="hint">⏱ Runs locally on a 7B model — a full tender takes a few minutes. You'll see live progress.</div>
+        </div>
+        <div id="draftResult"></div>
+      </section>
+
+      <!-- EXTRACT -->
+      <section class="view" id="view-extract">
+        <header class="page-head">
+          <h1>Extract from a PDF</h1>
+          <p>Upload a Scope of Work or RFP document. The AI extracts a structured buyer form.</p>
+        </header>
+        <div class="panel">
+          <div id="dropZone" class="dropzone">
+            <div class="dz-ico">⬆</div>
+            <div class="dz-main">Drop a PDF here or <span class="link">browse</span></div>
+            <div class="dz-sub" id="dzFile">No file selected</div>
+            <input type="file" id="extractFile" accept="application/pdf" hidden />
+          </div>
+          <button id="extractBtn" class="btn primary" disabled>Extract Buyer Form</button>
+        </div>
+        <div id="extractResult"></div>
+      </section>
+
+      <!-- VALIDATE -->
+      <section class="view" id="view-validate">
+        <header class="page-head">
+          <h1>Vendor Validation</h1>
+          <p>The agent reasons over four verification tools and returns a decision: approve, correct, or flag.</p>
+        </header>
+        <div class="panel">
+          <div class="grid two">
+            <div>
+              <label class="field-label">Commercial Registration (CR) number</label>
+              <input id="vCr" class="input" placeholder="7001234567" value="7001234567" />
+              <div class="hint">Saudi CR: starts with 7, exactly 10 digits.</div>
+            </div>
+            <div>
+              <label class="field-label">Legal name (English)</label>
+              <input id="vNameEn" class="input" placeholder="Alpha Tech Solutions LLC" value="Alpha Tech Solutions LLC" />
+            </div>
+            <div>
+              <label class="field-label">Legal name (Arabic)</label>
+              <input id="vNameAr" class="input" dir="rtl" placeholder="شركة ألفا تك" value="شركة ألفا تك للحلول" />
+            </div>
+            <div>
+              <label class="field-label">Selected category</label>
+              <select id="vCategory" class="input"></select>
+            </div>
+          </div>
+          <label class="field-label" style="margin-top:18px">Uploaded documents</label>
+          <div class="chips" id="vDocs"></div>
+          <button id="validateBtn" class="btn primary" style="margin-top:20px">Validate Vendor</button>
+        </div>
+        <div id="validateResult"></div>
+      </section>
+
+      <!-- EVALUATE -->
+      <section class="view" id="view-evaluate">
+        <header class="page-head">
+          <h1>Evaluate &amp; Rank</h1>
+          <p>Runs the bundled IT-infrastructure sample: three vendor bids scored in isolation, then ranked.</p>
+        </header>
+        <div class="panel">
+          <div class="isolation-note">
+            <b>Isolation enforced.</b> Each vendor is scored alone — no bid ever sees another. Ranking sees only the scores.
+          </div>
+          <button id="evaluateBtn" class="btn primary">Run Sample Evaluation</button>
+          <div class="hint">⏱ Scores 3 vendors + ranks — a few minutes on the local model.</div>
+        </div>
+        <div id="evaluateResult"></div>
+      </section>
+
+      <!-- KB -->
+      <section class="view" id="view-kb">
+        <header class="page-head">
+          <h1>Knowledge Base</h1>
+          <p>Semantic search over the corpus that grounds the drafting agents.</p>
+        </header>
+        <div class="panel">
+          <div class="row">
+            <input id="kbQuery" class="input" placeholder="e.g. performance bond requirements" />
+            <button id="kbBtn" class="btn primary">Search</button>
+          </div>
+          <div class="hint">Fast — embeddings only. Try: “confidentiality”, “how are bids evaluated”, “liquidated damages”.</div>
+        </div>
+        <div id="kbResult"></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
