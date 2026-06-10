@@ -23,6 +23,11 @@ class BaseSectionAgent:
         self.client = client
 
     def _call(self, system: str, user: str, max_tokens: int = 2500) -> str | None:
+        # Tag this worker thread so streamed tokens show up under this section's name
+        # in the live activity console.
+        from agents import activity
+
+        activity.set_label(self.__class__.__name__.replace("SectionAgent", " section"))
         try:
             return chat_text(
                 [

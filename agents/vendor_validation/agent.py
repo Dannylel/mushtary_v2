@@ -123,11 +123,22 @@ class VendorValidationAgent(BaseAgent):
 
     def __init__(self, api_key: str | None = None):
         # Native LangChain: bind the OpenAI-format tool schemas to the local chat model.
-        self._model = make_chat_model(temperature=0.1, max_tokens=1024).bind_tools(TOOLS)
+        # stream_activity=False: streamed tool-call deltas are unreliable on local servers;
+        # the activity console gets tool-call info events from the loop below instead.
+        self._model = make_chat_model(
+            temperature=0.1, max_tokens=1024, stream_activity=False
+        ).bind_tools(TOOLS)
 
     def run(self, payload: VendorValidationInput) -> AIArtifact:
         trace_id = self.new_trace_id()
         logger.info("VendorValidationAgent started", extra={"trace_id": trace_id, "vendor_id": payload.vendor_id})
+
+        # Label + lifecycle events for the live activity console (this agent doesn't
+        # stream tokens — tool-call deltas are unreliable — so it narrates instead).
+        from agents import activity
+
+        activity.set_label("Vendor validation")
+        activity.publish("info", f"Validating vendor {payload.vendor_id} (CR {payload.cr_number})")
 
         input_snapshot = self.sanitize_input(payload.model_dump(mode="json"))
         doc_types = [doc.doc_type for doc in payload.documents]
@@ -168,8 +179,10 @@ class VendorValidationAgent(BaseAgent):
 
             # Execute each tool locally and append its result
             for tc in tool_calls:
+                activity.publish("info", f"Calling tool: {tc['name']}")
                 result = _dispatch_tool(tc["name"], tc.get("args") or {}, payload.documents)
                 logger.debug("Tool executed", extra={"tool": tc["name"], "trace_id": trace_id})
+                activity.publish("info", f"Tool {tc['name']} returned: {result[:160]}")
                 messages.append(ToolMessage(content=result, tool_call_id=tc["id"]))
 
         else:

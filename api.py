@@ -36,6 +36,25 @@ UPLOADS.mkdir(exist_ok=True)
 
 app = FastAPI(title="Mushtary Demo API", version="1.0.0")
 
+# ── Activity feed: bridge agents' log lines into the live console ───────────────
+from agents import activity  # noqa: E402  (after dotenv so config is loaded)
+import logging
+
+
+class _ActivityLogHandler(logging.Handler):
+    """Forward agents.* INFO logs into the activity feed as narrator lines."""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            activity.publish("info", record.getMessage(), label=record.name.split(".")[-1])
+        except Exception:  # the feed must never break logging
+            pass
+
+
+_agents_logger = logging.getLogger("agents")
+_agents_logger.setLevel(logging.INFO)
+_agents_logger.addHandler(_ActivityLogHandler())
+
 
 # ── Tiny in-memory job manager ──────────────────────────────────────────────────
 # A job is one agent/pipeline run. Status flows PENDING -> RUNNING -> SUCCESS|FAILURE.
@@ -66,17 +85,20 @@ def _run_async(job: Job, fn, *args, **kwargs) -> None:
     def _target():
         with _LOCK:
             _JOBS[job.id].status = "RUNNING"
+        activity.publish("info", f"Job started: {job.kind}", label="job")
         try:
             result = fn(*args, **kwargs)
             with _LOCK:
                 _JOBS[job.id].status = "SUCCESS"
                 _JOBS[job.id].result = result
                 _JOBS[job.id].finished_at = datetime.now(timezone.utc).isoformat()
+            activity.publish("info", f"Job finished: {job.kind}", label="job")
         except Exception as e:  # surface the failure to the UI rather than dying silently
             with _LOCK:
                 _JOBS[job.id].status = "FAILURE"
                 _JOBS[job.id].error = f"{type(e).__name__}: {e}"
                 _JOBS[job.id].finished_at = datetime.now(timezone.utc).isoformat()
+            activity.publish("info", f"Job FAILED: {job.kind} — {e}", label="job")
             traceback.print_exc()
 
     threading.Thread(target=_target, daemon=True).start()
@@ -296,6 +318,16 @@ def meta():
         "kb_available": kb.available,
         "kb_count": kb_count,
     }
+
+
+@app.get("/api/activity")
+def get_activity(since: int = 0):
+    """Live feed of agent activity (streamed model text + lifecycle lines).
+
+    The frontend polls this while a job runs to show what the model is writing.
+    """
+    events, last = activity.get_since(since)
+    return {"events": events, "last_id": last}
 
 
 @app.get("/api/kb/search")

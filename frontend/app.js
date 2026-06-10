@@ -22,6 +22,71 @@ function show(view) {
 $$(".nav-item").forEach(b => b.addEventListener("click", () => show(b.dataset.view)));
 $$("[data-go]").forEach(c => c.addEventListener("click", () => show(c.dataset.go)));
 
+// ── Live activity console ─────────────────────────────────────────────────────
+const consoleEl = $("#console"), consoleBody = $("#consoleBody"),
+      consoleDot = $("#consoleDot"), consoleSub = $("#consoleSub");
+let actLast = 0, actTimer = null, actStopAt = null;
+const labelClass = {};
+let labelSeq = 0;
+
+$("#consoleHead").addEventListener("click", () => consoleEl.classList.toggle("collapsed"));
+
+function consoleOpen() { consoleEl.classList.remove("collapsed"); }
+
+function lblCls(label) {
+  if (!(label in labelClass)) labelClass[label] = `lbl-${labelSeq++ % 6}`;
+  return labelClass[label];
+}
+
+function appendEvent(ev) {
+  const nearBottom = consoleBody.scrollHeight - consoleBody.scrollTop - consoleBody.clientHeight < 60;
+  if (ev.kind === "token") {
+    // Append to the last block if it belongs to the same agent; else start a new block.
+    let block = consoleBody.lastElementChild;
+    if (!block || !block.classList.contains("con-block") || block.dataset.label !== ev.label) {
+      block = document.createElement("div");
+      block.className = "con-block";
+      block.dataset.label = ev.label;
+      block.innerHTML = `<span class="con-label ${lblCls(ev.label)}">${esc(ev.label)}</span><div class="con-text"></div>`;
+      consoleBody.appendChild(block);
+    }
+    $(".con-text", block).textContent += ev.text;
+  } else if (ev.kind === "info") {
+    const line = document.createElement("div");
+    line.className = "con-info";
+    line.textContent = `[${ev.label}] ${ev.text}`;
+    consoleBody.appendChild(line);
+  } else { // start / end
+    const line = document.createElement("div");
+    line.className = "con-meta";
+    line.textContent = ev.kind === "start" ? `▶ ${ev.label} started writing…` : `✓ ${ev.label} ${ev.text}`;
+    consoleBody.appendChild(line);
+  }
+  if (nearBottom) consoleBody.scrollTop = consoleBody.scrollHeight;
+}
+
+async function pollActivity() {
+  try {
+    const data = await fetch(`/api/activity?since=${actLast}`).then(r => r.json());
+    data.events.forEach(appendEvent);
+    if (data.events.length) actLast = data.last_id;
+  } catch { /* server briefly unreachable — keep polling */ }
+  if (actStopAt && Date.now() > actStopAt) {
+    clearInterval(actTimer); actTimer = null;
+    consoleDot.classList.remove("live");
+    consoleSub.textContent = "idle";
+  }
+}
+
+function activityStart(what) {
+  actStopAt = null;
+  consoleDot.classList.add("live");
+  consoleSub.textContent = `running: ${what}`;
+  consoleOpen();
+  if (!actTimer) actTimer = setInterval(pollActivity, 1000);
+}
+function activityStop() { actStopAt = Date.now() + 4000; } // drain the tail, then idle
+
 // ── Polling helper for background jobs ──────────────────────────────────────────
 async function pollJob(jobId, { onTick, intervalMs = 2000 } = {}) {
   const start = Date.now();
@@ -48,10 +113,10 @@ function setTimer(container, secs) {
   if (t) t.textContent = `${secs}s`;
 }
 
-// ── Generic "run a job and render" wrapper ──────────────────────────────────────
 async function runJob({ start, target, loadMain, loadSub, render }) {
   const box = $(target);
   box.innerHTML = loaderHTML(loadMain, loadSub);
+  activityStart(loadMain);
   try {
     const { job_id } = await start();
     const result = await pollJob(job_id, { onTick: s => setTimer(box, s) });
@@ -59,16 +124,246 @@ async function runJob({ start, target, loadMain, loadSub, render }) {
     box.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (e) {
     box.innerHTML = errorHTML(e.message);
+  } finally {
+    activityStop();
   }
 }
 
-// ── DRAFT ───────────────────────────────────────────────────────────────────────
+// ── Rendering primitives ─────────────────────────────────────────────────────────
+function block(num, title, body) {
+  return `<div class="section-block">
+    <div class="sb-head"><span class="num">${num}</span>${esc(title)}</div>
+    <div class="sb-body prose">${body}</div>
+  </div>`;
+}
+function ul(items, mapFn) {
+  const arr = (items || []).filter(Boolean);
+  if (!arr.length) return "";
+  return `<ul class="ul">${arr.map(i => `<li>${mapFn ? mapFn(i) : esc(i)}</li>`).join("")}</ul>`;
+}
+function sub(title, body) {
+  if (!body) return "";
+  return `<h4>${esc(title)}</h4>${body}`;
+}
+function para(text) { return text ? `<p>${esc(text)}</p>` : ""; }
+function kv(rows) {
+  const filled = rows.filter(([, v]) => v !== null && v !== undefined && v !== "");
+  if (!filled.length) return "";
+  return `<dl class="kv">${filled.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>`;
+}
+function yesNo(v) { return v === true ? "Yes" : v === false ? "No" : v ?? ""; }
+function docList(title, docs) {
+  if (!docs || !docs.length) return "";
+  const items = docs.map(d => {
+    const meta = [d.category, d.applicability, d.issuing_authority].filter(Boolean).join(" · ");
+    return `<div class="doc-item"><b>${esc(d.name)}</b><span>${esc(meta)}${d.notes ? " — " + esc(d.notes) : ""}</span></div>`;
+  }).join("");
+  return `<h4>${esc(title)}</h4>${items}`;
+}
+
+// ── DRAFT: render the full 18-section tender (mirrors the PDF layout) ───────────
+function renderDraft(result) {
+  const artifact = result.artifact || {};
+  const o = artifact.output || {};
+  const form = artifact.input_snapshot || {};   // the buyer form — source of buyer-stated facts
+  const fid = result.file_id;
+
+  const meta = o.metadata || {};
+  const ds = o.tender_data_sheet || {};
+  const intro = o.introduction || {};
+  const ins = o.instructions_to_bidders || {};
+  const award = o.award_and_contract || {};
+  const pf = o.proposal_format || {};
+  const ov = o.project_overview || {};
+  const obj = o.objectives || {};
+  const scope = o.scope_of_work || {};
+  const dels = o.deliverables || {};
+  const tl = o.timeline || {};
+  const team = o.team_requirements || {};
+  const terms = o.general_terms || {};
+  const ev = o.evaluation_criteria || {};
+  const pay = o.payment_terms || {};
+
+  const sections = [];
+
+  // 1. Tender Data Sheet
+  sections.push(block(1, "Tender Data Sheet", kv([
+    ["Tender Title", ds.tender_title], ["Tender Reference", ds.tender_reference],
+    ["Buyer Entity", ds.buyer_entity], ["Procurement Category", ds.procurement_category],
+    ["Tender Type", ds.tender_type], ["Procurement Method", ds.procurement_method],
+    ["Submission Method", ds.submission_method], ["Issue Date", ds.issue_date],
+    ["Site Visit", ds.site_visit], ["Clarification Deadline", ds.clarification_deadline],
+    ["Submission Deadline", ds.submission_deadline], ["Opening Date", ds.opening_date],
+    ["Proposal Validity", ds.proposal_validity], ["Bid Security", ds.bid_security],
+    ["Performance Bond", ds.performance_bond], ["Contract Duration", ds.contract_duration],
+    ["Warranty Duration", ds.warranty_duration], ["Language", ds.language],
+    ["Evaluation Model", ds.evaluation_model], ["Minimum Technical Score", ds.minimum_technical_score],
+  ])));
+
+  // 2. Introduction
+  sections.push(block(2, "Introduction",
+    sub("About the Organisation", para(intro.about_organization)) +
+    sub("Background", para(intro.background)) +
+    sub("Purpose of this RFP", para(intro.purpose_of_rfp))));
+
+  // 3. Instructions to Bidders
+  const sc = ins.submission_controls || {};
+  sections.push(block(3, "Instructions to Bidders",
+    sub("Submission Rules", ul(ins.submission_rules)) +
+    sub("Timetable", kv([
+      ["RFP Issue Date", (ins.timetable || {}).issue_date],
+      ["Clarifications Deadline", (ins.timetable || {}).clarifications_deadline],
+      ["Submission Deadline", (ins.timetable || {}).submission_deadline],
+    ])) +
+    sub("Clarifications", para(ins.clarifications_process)) +
+    sub("Proposal Validity", para(ins.proposal_validity_days ? `Proposals must remain valid for ${ins.proposal_validity_days} days from the closing date.` : "")) +
+    sub("Confidentiality", para(ins.confidentiality_statement)) +
+    sub("Conflict of Interest", para(ins.conflict_of_interest_policy)) +
+    sub("Cancellation Rights", para(ins.cancellation_rights)) +
+    sub("Platform Submission Controls", kv([
+      ["Platform Submission Only", yesNo(sc.platform_submission_only)],
+      ["Separate Technical / Commercial", yesNo(sc.separate_technical_commercial)],
+      ["Technical File Format", sc.technical_file_format],
+      ["Commercial File Format", sc.commercial_file_format],
+      ["Maximum File Size", sc.max_file_size_mb ? `${sc.max_file_size_mb} MB` : ""],
+      ["Resubmission Before Deadline", yesNo(sc.resubmission_allowed_before_deadline)],
+      ["Late Submission Allowed", yesNo(sc.late_submission_allowed)],
+    ]))));
+
+  // 4. Award & Contract
+  sections.push(block(4, "Award and Contract",
+    sub("Evaluation Process", para(award.evaluation_process)) +
+    sub("Negotiation Policy", para(award.negotiation_policy)) +
+    sub("Award Rules", para(award.award_rules)) +
+    sub("Bid Security", para(award.bid_security)) +
+    sub("Performance Bond", para(award.performance_bond_text)) +
+    sub("Saudization Requirements", para(award.saudization_requirements))));
+
+  // 5. Vendor Document Requirements
+  sections.push(block(5, "Vendor Document Requirements",
+    sub("Document Governance Rules", ul(award.vendor_document_rules)) +
+    sub("Documents Required for this Tender", ul(award.statutory_documents_required)) +
+    docList("Mandatory Documents", award.mandatory_documents) +
+    docList("Conditional Documents", award.conditional_documents) +
+    docList("Sector-Specific Documents", award.sector_specific_documents) +
+    docList("Optional Capability Documents", award.optional_documents)));
+
+  // 6. Proposal Packaging & Format — the financial/commercial requirements live here
+  const tp = pf.technical_proposal || {}, cp = pf.commercial_proposal || {};
+  sections.push(block(6, "Proposal Packaging and Format",
+    para(pf.submission_method) +
+    sub("Technical Proposal — Required Sections", kv([["File Naming", tp.file_naming_convention]]) + ul(tp.required_sections)) +
+    sub("Commercial Proposal — Pricing Requirements", kv([
+      ["File Naming", cp.file_naming_convention],
+      ["Accepted Currencies", (cp.accepted_currencies || []).join(", ")],
+    ]) + ul(cp.pricing_requirements))));
+
+  // 7. Project Overview
+  sections.push(block(7, "Project Overview",
+    sub("Introduction", para(ov.project_introduction)) +
+    sub("Background", para(ov.background)) +
+    sub("Context", para(ov.context))));
+
+  // 8. Objectives
+  sections.push(block(8, "Objectives",
+    sub("Business Goals", ul(obj.business_goals)) +
+    sub("Expected Outcomes", ul(obj.expected_outcomes)) +
+    sub("KPIs", ul(obj.kpis))));
+
+  // 9. Scope of Work + buyer-specified technical requirements
+  const cats = (scope.categories || []).map(c =>
+    sub(c.name, para(c.description) + ul(c.requirements))).join("");
+  const phases = (scope.phases || []).map(p =>
+    sub(p.phase, ul(p.activities))).join("");
+  sections.push(block(9, "Scope of Work",
+    cats +
+    sub("Technical Requirements (buyer-specified)", para(form.technical_requirements)) +
+    sub("Methodology Requirements", para(form.methodology_requirements)) +
+    (phases ? `<h4 style="margin-top:18px">Execution Phases</h4>${phases}` : "") +
+    sub("General Requirements", ul(scope.general_requirements))));
+
+  // 10. Deliverables
+  const delItems = (dels.deliverables || []).map(d =>
+    `<div class="doc-item"><b>${esc(d.name)}</b><span>${esc(d.description || "")}${d.format ? " · Format: " + esc(d.format) : ""}${d.deadline_note ? " · " + esc(d.deadline_note) : ""}</span></div>`).join("");
+  const tiers = (dels.escalation_tiers || []).map(t =>
+    `<div class="milestone-row"><span>${esc(t.level)}</span><span class="muted2">${esc(t.trigger_delay)}</span><span>${esc(t.contact_role)}</span></div>`).join("");
+  sections.push(block(10, "Deliverables",
+    sub("Work Order Process", ul(dels.work_order_process)) +
+    sub("Required Deliverables", delItems) +
+    sub("Approval Process", para(dels.approval_process)) +
+    sub("Reporting Requirements", ul(dels.reporting_requirements)) +
+    sub("Escalation Matrix", tiers)));
+
+  // 11. Timeline
+  const miles = (tl.milestones || []).map(m =>
+    `<div class="milestone-row"><span class="muted2">${esc(m.phase)}</span><span><b>${esc(m.milestone)}</b></span><span>${esc(m.target_date)}</span></div>`).join("");
+  sections.push(block(11, "Timeline",
+    para(tl.total_duration) +
+    sub("Project Phases", ul(tl.project_phases)) +
+    sub("Key Milestones", miles)));
+
+  // 12. Team Requirements
+  const roles = (team.roles || []).map(r =>
+    `<div class="doc-item"><b>${esc(r.position)}</b><span>${esc(r.responsibilities)} — Min. experience: ${esc(r.minimum_experience)}</span></div>`).join("");
+  sections.push(block(12, "Team Requirements", roles + sub("Saudization", para(team.saudization_note))));
+
+  // 13. General & Special Terms
+  sections.push(block(13, "General and Special Terms",
+    sub("Legal Terms", ul(terms.legal_terms)) +
+    sub("Compliance Requirements", ul(terms.compliance_requirements)) +
+    sub("Language Requirements", para(terms.language_requirements)) +
+    sub("Equipment and Logistics", para(terms.equipment_and_logistics))));
+
+  // 14. Confidentiality
+  sections.push(block(14, "Confidentiality", para(o.confidentiality)));
+
+  // 15. Evaluation Methodology — technical + financial parameters in full
+  sections.push(block(15, "Evaluation Methodology",
+    kv([
+      ["Evaluation Model", ev.evaluation_model],
+      ["Technical Weight", ev.technical_weight != null ? ev.technical_weight + "%" : ""],
+      ["Financial Weight", ev.financial_weight != null ? ev.financial_weight + "%" : ""],
+      ["Minimum Technical Score", ev.minimum_technical_score != null ? ev.minimum_technical_score + "%" : ""],
+      ["Award Basis", ev.award_basis],
+    ]) +
+    sub("Mandatory Pass/Fail Criteria", ul(ev.mandatory_criteria, c => esc(typeof c === "string" ? c : c.criterion))) +
+    sub("Technical Evaluation Parameters", ul(ev.technical_parameters)) +
+    sub("Financial Evaluation Parameters", ul(ev.financial_parameters))));
+
+  // 16. Payment Terms
+  sections.push(block(16, "Payment Terms",
+    sub("Payment Basis", para(pay.payment_basis)) +
+    sub("Invoice Requirements", ul(pay.invoice_requirements)) +
+    sub("Payment Timeline", para(pay.payment_timeline))));
+
+  // 17. Annexures + 18. Approval
+  sections.push(block(17, "Annexures", ul(o.annexures)));
+  sections.push(block(18, "Buyer Approval",
+    para("PENDING BUYER APPROVAL — this tender cannot be published until reviewed and approved by the authorized Buyer-Admin.")));
+
+  return `<div class="result">
+    <div class="result-head">
+      <div>
+        <div class="result-title">${esc(meta.title || "Tender Draft")}</div>
+        <div class="hint" style="margin-top:4px">Reference: ${esc(meta.tender_id || "—")} · Issued by ${esc(meta.buyer_entity || "—")}</div>
+      </div>
+      <span class="badge draft dot">DRAFT · pending buyer approval</span>
+    </div>
+    <div class="toolbar" style="margin-bottom:16px">
+      ${fid ? `<a class="btn primary" href="/api/download/${fid}/pdf" target="_blank">⬇ Download PDF</a>
+      <a class="btn ghost" href="/api/download/${fid}/json" target="_blank">⬇ JSON</a>` : ""}
+    </div>
+    ${sections.join("")}
+  </div>`;
+}
+
+// ── DRAFT (seed) ───────────────────────────────────────────────────────────────
 $("#draftBtn").addEventListener("click", () => {
   const seed = $("#draftSeed").value.trim();
   runJob({
     target: "#draftResult",
     loadMain: "Drafting your tender…",
-    loadSub: "Inventing the buyer brief, then drafting 4 sections in parallel",
+    loadSub: "Inventing the buyer brief, then drafting 4 sections in parallel — watch the console below",
     start: () => fetch("/api/jobs/draft", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ seed }),
@@ -77,71 +372,7 @@ $("#draftBtn").addEventListener("click", () => {
   });
 });
 
-function renderDraft(result) {
-  const o = (result.artifact && result.artifact.output) || {};
-  const meta = o.metadata || {};
-  const fid = result.file_id;
-  const title = meta.title || "Tender Draft";
-
-  const sections = [];
-  const ov = o.project_overview || {};
-  sections.push(block("1", "Project Overview", `
-    ${ov.project_introduction ? `<p>${esc(ov.project_introduction)}</p>` : ""}
-    ${ov.background ? `<h4>Background</h4><p>${esc(ov.background)}</p>` : ""}
-    ${ov.context ? `<h4>Context</h4><p>${esc(ov.context)}</p>` : ""}`));
-
-  const obj = o.objectives || {};
-  sections.push(block("2", "Objectives", `
-    ${listBlock("Business goals", obj.business_goals)}
-    ${listBlock("Expected outcomes", obj.expected_outcomes)}
-    ${listBlock("KPIs", obj.kpis)}`));
-
-  const scope = o.scope_of_work || {};
-  const cats = (scope.categories || []).map(c =>
-    `<h4>${esc(c.name)}</h4><p>${esc(c.description || "")}</p>${listBlock("", c.requirements)}`).join("");
-  sections.push(block("3", "Scope of Work", cats || "<p class='empty'>—</p>"));
-
-  const ev = o.evaluation_criteria || {};
-  sections.push(block("4", "Evaluation", `
-    <dl class="kv">
-      <dt>Model</dt><dd>${esc(ev.evaluation_model || meta.evaluation_model || "—")}</dd>
-      <dt>Technical / Financial</dt><dd>${esc(ev.technical_weight ?? "—")} / ${esc(ev.financial_weight ?? "—")}</dd>
-      <dt>Award basis</dt><dd>${esc(ev.award_basis || "—")}</dd>
-    </dl>
-    ${listBlock("Technical parameters", ev.technical_parameters)}`));
-
-  const legal = o.general_terms || {};
-  sections.push(block("5", "Legal & Terms", listBlock("Legal terms", legal.legal_terms) || "<p class='empty'>—</p>"));
-
-  return `<div class="result">
-    <div class="result-head">
-      <div>
-        <div class="result-title">${esc(title)}</div>
-        <div class="hint" style="margin-top:4px">Reference: ${esc(meta.tender_id || "—")} · Issued by ${esc(meta.buyer_entity || "—")}</div>
-      </div>
-      <span class="badge draft dot">DRAFT · pending buyer approval</span>
-    </div>
-    <div class="toolbar" style="margin-bottom:16px">
-      <a class="btn primary" href="/api/download/${fid}/pdf" target="_blank">⬇ Download PDF</a>
-      <a class="btn ghost" href="/api/download/${fid}/json" target="_blank">⬇ JSON</a>
-    </div>
-    ${sections.join("")}
-  </div>`;
-}
-
-function block(num, title, body) {
-  return `<div class="section-block">
-    <div class="sb-head"><span class="num">${num}</span>${esc(title)}</div>
-    <div class="sb-body prose">${body}</div>
-  </div>`;
-}
-function listBlock(label, items) {
-  if (!items || !items.length) return label ? `` : "";
-  const lis = items.map(i => `<li>${esc(typeof i === "string" ? i : (i.criterion || JSON.stringify(i)))}</li>`).join("");
-  return `${label ? `<h4>${esc(label)}</h4>` : ""}<ul class="ul">${lis}</ul>`;
-}
-
-// ── EXTRACT ───────────────────────────────────────────────────────────────────
+// ── EXTRACT (and full pipeline from SOW) ─────────────────────────────────────────
 const dropZone = $("#dropZone"), extractFile = $("#extractFile");
 let pickedFile = null;
 dropZone.addEventListener("click", () => extractFile.click());
@@ -154,6 +385,7 @@ function setFile(f) {
   pickedFile = f;
   $("#dzFile").textContent = f.name;
   $("#extractBtn").disabled = false;
+  $("#extractDraftBtn").disabled = false;
 }
 $("#extractBtn").addEventListener("click", () => {
   if (!pickedFile) return;
@@ -164,6 +396,17 @@ $("#extractBtn").addEventListener("click", () => {
     loadSub: "Extracting a structured buyer form via intra-document retrieval",
     start: () => fetch("/api/jobs/extract", { method: "POST", body: fd }).then(r => r.json()),
     render: r => renderForm(r.form, "Extracted Buyer Form"),
+  });
+});
+$("#extractDraftBtn").addEventListener("click", () => {
+  if (!pickedFile) return;
+  const fd = new FormData(); fd.append("file", pickedFile);
+  runJob({
+    target: "#extractResult",
+    loadMain: "Full pipeline: extracting, then drafting the complete tender…",
+    loadSub: "Document → buyer form → 4 parallel section agents → assembled RFP",
+    start: () => fetch("/api/jobs/draft-sow", { method: "POST", body: fd }).then(r => r.json()),
+    render: renderDraft,
   });
 });
 
@@ -183,8 +426,10 @@ function renderForm(form, title) {
         <dt>Buyer</dt><dd>${esc(f.buyer_name || "—")}</dd>
         <dt>Category</dt><dd>${esc(f.category || "—")} / ${esc(f.subcategory || "—")}</dd>
         <dt>Objective</dt><dd>${esc(f.project_objective || "—")}</dd>
+        <dt>Technical requirements</dt><dd>${esc(f.technical_requirements || "—")}</dd>
         <dt>Submission deadline</dt><dd>${esc(f.submission_deadline || "—")}</dd>
         <dt>Estimated value</dt><dd>${f.estimated_value_sar ? "SAR " + Number(f.estimated_value_sar).toLocaleString() : "—"}</dd>
+        <dt>Payment terms</dt><dd>${esc(f.payment_terms || "—")}</dd>
       </dl></div></div>
     <div class="section-block"><div class="sb-head"><span class="num">✎</span>Scope</div>
       <div class="sb-body prose"><p>${esc(f.scope_of_work || "—")}</p></div></div>
@@ -237,7 +482,7 @@ function renderValidation(artifact) {
     <div class="section-block"><div class="sb-body">
       <dl class="kv">
         <dt>CR status</dt><dd>${esc(v.cr_status || "—")}</dd>
-        <dt>Name match</dt><dd>${v.name_match ? "Yes" : "No"} (${Math.round((v.name_match_confidence||0)*100)}% confidence)</dd>
+        <dt>Name match</dt><dd>${v.name_match ? "Yes" : "No"} (${Math.round((v.name_match_confidence || 0) * 100)}% confidence)</dd>
         <dt>Category alignment</dt><dd>${esc(v.category_alignment || "—")}</dd>
         <dt>Duplicate</dt><dd>${v.is_duplicate ? "Yes" : "No"}</dd>
       </dl>
@@ -285,14 +530,14 @@ function renderEvaluation(result) {
     if (dq.disqualified) {
       return `<div class="vendor-card"><div class="vc-head"><div class="vc-name">${esc(name)}</div>
         <span class="badge bad dot">Disqualified</span></div>
-        <p class="prose" style="margin:0">${esc((dq.reasons||[]).join("; "))}</p></div>`;
+        <p class="prose" style="margin:0">${esc((dq.reasons || []).join("; "))}</p></div>`;
     }
     const bar = (label, val) => `<div class="bar-row"><span>${label}</span>
-      <div class="bar-track"><div class="bar-fill" style="width:${Math.max(0,Math.min(100,val))}%"></div></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${Math.max(0, Math.min(100, val))}%"></div></div>
       <span style="text-align:right">${Number(val).toFixed(0)}</span></div>`;
     return `<div class="vendor-card">
       <div class="vc-head"><div class="vc-name">${esc(name)}</div>
-        <span class="badge ${s.risk_level==='low'?'ok':s.risk_level==='medium'?'warn':'bad'} dot">risk: ${esc(s.risk_level)}</span></div>
+        <span class="badge ${s.risk_level === 'low' ? 'ok' : s.risk_level === 'medium' ? 'warn' : 'bad'} dot">risk: ${esc(s.risk_level)}</span></div>
       <div class="bars">
         ${bar("VRI (40%)", fb.vri_component)}
         ${bar("Requirement match (30%)", fb.requirement_match)}
@@ -334,7 +579,7 @@ async function kbSearch() {
         <div class="hit-head">
           <span class="tag ${esc(h.authority)}">${esc(h.authority)}</span>
           <span class="hit-src">${esc(h.source)}</span>
-          <span class="hit-score">${(h.score*100).toFixed(0)}% match</span>
+          <span class="hit-score">${(h.score * 100).toFixed(0)}% match</span>
         </div>
         <div class="hit-text">${esc(h.text)}</div>
       </div>`).join("")}</div>`;
@@ -344,12 +589,16 @@ async function kbSearch() {
 // ── Boot: load metadata ──────────────────────────────────────────────────────────
 (async function init() {
   buildDocChips();
+  // Seed the activity poll position so old events aren't replayed on page load.
+  try {
+    const a = await fetch("/api/activity?since=0").then(r => r.json());
+    actLast = a.last_id || 0;
+  } catch { }
   try {
     const m = await fetch("/api/meta").then(r => r.json());
     $("#envModel").textContent = m.model;
     $("#envEmbed").textContent = m.embed_model;
     $("#envKb").textContent = m.kb_available ? "ready" : "empty";
-    // category dropdown
     const sel = $("#vCategory");
     sel.innerHTML = Object.keys(m.categories || {}).map(c => `<option>${esc(c)}</option>`).join("");
     $("#kbCount").textContent = m.kb_count ?? (m.kb_available ? "—" : "0");

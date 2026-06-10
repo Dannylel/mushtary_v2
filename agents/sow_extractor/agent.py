@@ -89,6 +89,11 @@ class SoWExtractorAgent(BaseAgent):
         trace_id = self.new_trace_id()
         logger.info("SoWExtractorAgent started", extra={"trace_id": trace_id})
 
+        # Label for the live activity console.
+        from agents import activity
+
+        activity.set_label("SoW extractor")
+
         # Keep input within token limits. Short docs pass through unchanged; long docs go
         # through intra-document retrieval (RAG) so the MIDDLE of the document is no longer
         # silently dropped. Falls back to head+tail truncation if embeddings are unavailable.

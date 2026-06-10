@@ -93,16 +93,16 @@
       <!-- DRAFT -->
       <section class="view" id="view-draft">
         <header class="page-head">
-          <h1>Draft a Tender</h1>
-          <p>The autonomous pipeline invents a realistic buyer brief from your topic, then drafts the full RFP.</p>
+          <h1>Draft a Tender <span class="badge ok" style="vertical-align:middle">full pipeline</span></h1>
+          <p>Runs the complete pipeline: AI invents the buyer brief from your topic, four section agents draft in parallel (grounded on the knowledge base), then everything is assembled into the 18-section RFP.</p>
         </header>
         <div class="panel">
           <label class="field-label">Tender topic / seed <span class="muted">(optional — leave blank for a random realistic tender)</span></label>
           <div class="row">
             <input id="draftSeed" class="input" placeholder="e.g. hospital MRI machine supply and installation" />
-            <button id="draftBtn" class="btn primary">Generate Draft</button>
+            <button id="draftBtn" class="btn primary">Run Full Pipeline</button>
           </div>
-          <div class="hint">⏱ Runs locally on a 7B model — a full tender takes a few minutes. You'll see live progress.</div>
+          <div class="hint">⏱ Runs locally on a 7B model — a full tender takes a few minutes. Watch the model write live in the activity console below.</div>
         </div>
         <div id="draftResult"></div>
       </section>
@@ -120,7 +120,11 @@
             <div class="dz-sub" id="dzFile">No file selected</div>
             <input type="file" id="extractFile" accept="application/pdf" hidden />
           </div>
-          <button id="extractBtn" class="btn primary" disabled>Extract Buyer Form</button>
+          <div class="toolbar">
+            <button id="extractBtn" class="btn primary" disabled>Extract Buyer Form</button>
+            <button id="extractDraftBtn" class="btn ghost" disabled>⚡ Full Pipeline: Extract → Draft Tender</button>
+          </div>
+          <div class="hint">"Full Pipeline" reads the document, builds the buyer form, then drafts the complete 18-section RFP from it.</div>
         </div>
         <div id="extractResult"></div>
       </section>
@@ -190,6 +194,17 @@
         <div id="kbResult"></div>
       </section>
     </main>
+  </div>
+
+  <!-- Live activity console -->
+  <div class="console collapsed" id="console">
+    <div class="console-head" id="consoleHead">
+      <span class="console-dot" id="consoleDot"></span>
+      <span class="console-title">Live activity</span>
+      <span class="console-sub" id="consoleSub">idle</span>
+      <button class="console-toggle" id="consoleToggle">▴</button>
+    </div>
+    <div class="console-body" id="consoleBody"></div>
   </div>
 
   <script src="/app.js"></script>

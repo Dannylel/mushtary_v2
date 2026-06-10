@@ -51,9 +51,69 @@ def make_client(api_key: str | None = None):
 # All agents and the LangGraph pipeline talk to the model through these helpers so
 # the provider/model is defined in exactly one place.
 
-def make_chat_model(temperature: float = 0.4, max_tokens: int | None = None, **kwargs):
-    """LangChain ChatOpenAI bound to the configured local (Ollama) endpoint."""
+def _make_activity_callback():
+    """Build a LangChain callback that mirrors streamed tokens into the activity feed.
+
+    Tokens are coalesced into ~80-char chunks (or up to a newline) before publishing so the
+    feed stays small while still feeling live. The callback runs on the calling thread, so
+    the thread-local agent label set via activity.set_label() is attached automatically.
+    Defined inside a factory so langchain_core is only imported when actually used.
+    """
+    from langchain_core.callbacks import BaseCallbackHandler
+
+    from agents import activity
+
+    class _ActivityStreamCallback(BaseCallbackHandler):
+        def __init__(self):
+            self._buf: list[str] = []
+            self._buf_len = 0
+
+        def _flush(self):
+            if self._buf:
+                activity.publish("token", "".join(self._buf))
+                self._buf, self._buf_len = [], 0
+
+        def on_chat_model_start(self, serialized, messages, **kwargs):
+            activity.publish("start", "thinking...")
+
+        def on_llm_new_token(self, token: str, **kwargs):
+            if not token:
+                return
+            self._buf.append(token)
+            self._buf_len += len(token)
+            if self._buf_len >= 80 or token.endswith("\n"):
+                self._flush()
+
+        def on_llm_end(self, response, **kwargs):
+            self._flush()
+            activity.publish("end", "done")
+
+        def on_llm_error(self, error, **kwargs):
+            self._flush()
+            activity.publish("end", f"error: {error}")
+
+    return _ActivityStreamCallback()
+
+
+def make_chat_model(temperature: float = 0.4, max_tokens: int | None = None,
+                    stream_activity: bool = True, **kwargs):
+    """LangChain ChatOpenAI bound to the configured local (Ollama) endpoint.
+
+    stream_activity: stream tokens and mirror them into agents.activity so the demo UI
+    can show live model output. Disable for tool-calling loops (vendor validation) where
+    streamed tool-call deltas are unreliable on some local servers.
+    """
     from langchain_openai import ChatOpenAI
+
+    callbacks = kwargs.pop("callbacks", None) or []
+    streaming = False
+    if stream_activity:
+        callbacks = [*callbacks, _make_activity_callback()]
+        streaming = True
+
+    if streaming:
+        # Ask the server to attach usage to the final stream chunk so token counts survive.
+        kwargs.setdefault("stream_usage", True)
 
     return ChatOpenAI(
         base_url=get_base_url(),
@@ -61,6 +121,8 @@ def make_chat_model(temperature: float = 0.4, max_tokens: int | None = None, **k
         model=get_model(),
         temperature=temperature,
         max_tokens=max_tokens,
+        streaming=streaming,
+        callbacks=callbacks or None,
         **kwargs,
     )
 

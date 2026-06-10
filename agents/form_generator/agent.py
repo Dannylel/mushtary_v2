@@ -125,6 +125,11 @@ class FormGeneratorAgent(BaseAgent):
         trace_id = self.new_trace_id()
         logger.info("FormGeneratorAgent started", extra={"trace_id": trace_id, "seed": seed})
 
+        # Label for the live activity console.
+        from agents import activity
+
+        activity.set_label("Form generator")
+
         raw = chat_text(
             [
                 {"role": "system", "content": SYSTEM_PROMPT},

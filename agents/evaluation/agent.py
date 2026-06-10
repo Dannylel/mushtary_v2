@@ -61,6 +61,11 @@ class EvaluationRankerAgent(BaseAgent):
             extra={"trace_id": trace_id, "vendor_id": payload.submission.vendor_id},
         )
 
+        # Label for the live activity console.
+        from agents import activity
+
+        activity.set_label(f"Scoring {payload.submission.vendor_id}")
+
         input_snapshot = self.sanitize_input(payload.model_dump(mode="json"))
 
         raw_text, usage = chat_with_usage(
@@ -104,6 +109,11 @@ class EvaluationRankerAgent(BaseAgent):
             "Ranking vendors",
             extra={"trace_id": trace_id, "tender_id": payload.tender_id, "count": len(payload.vendor_scores)},
         )
+
+        # Label for the live activity console.
+        from agents import activity
+
+        activity.set_label("Ranking")
 
         input_snapshot = {
             "tender_id": payload.tender_id,
