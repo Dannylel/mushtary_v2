@@ -11,18 +11,19 @@ To log results or look up context: open the vault and read `wiki/_hot.md` first.
 - Do NOT update `_hot.md` or `log.md` for QUERY-only sessions.
 
 ## Active task
-Tender Drafting pipeline is the working path. `python main.py` builds a hardcoded test buyer form, runs the
-drafting pipeline, and writes `tender_draft.json` + `tender_draft.pdf`. Vendor Validation, Evaluation, and
-SOW Extractor agents exist but are exercised via their own modules/tests, not `main.py`. No FastAPI app exists yet.
+run.py is the primary entry point (LangGraph): python run.py [--mode full|form|extract|context|scope|execution|legal|validate|score|rank].
+main.py is the LEGACY demo (PDF renderer now in pdf_renderer.py). agents/rag/ grounds drafting on a clause library
++ Saudi procurement law (corpus: agents/rag/corpora/tender_kb, rebuild via python -m agents.rag.index_documents).
+No FastAPI app yet; artifacts not DB-persisted yet.
 
 ## Project invariants
 - **The one product rule:** `AI generates → Human reviews → Human approves → Action taken`. AI NEVER publishes,
   activates, or awards directly. Every AI output is a `DRAFT` artifact gated behind explicit human approval. Do not bypass.
-- **LLM provider (docs say "Claude" — WRONG, trust the code):** OpenRouter, OpenAI-compatible API,
-  `base_url="https://openrouter.ai/api/v1"`, via the `openai` SDK. Model `google/gemini-2.5-flash`.
-  Set in `agents/base.py`, `agents/prompt_registry.py`, each `*/agent.py`, and `tender_drafting/sections/base.py` —
-  keep ALL of these consistent if you change model/provider.
-- **API key env var:** `gemini_API` (runner also accepts `OPENAI_API_KEY` / `OPENROUTER_API_KEY`). Key = OpenRouter key.
+- **LLM provider (LOCAL-ONLY):** Ollama, OpenAI-compatible, base_url http://localhost:11434/v1, via LangChain
+  ChatOpenAI. Default model qwen2.5:7b-instruct-q4_K_M. Single source of truth: agents/llm_config.py
+  (env: LLM_BASE_URL / LLM_MODEL / LLM_API_KEY). RAG embeddings: qwen3-embedding:0.6b (RAG_EMBED_MODEL).
+- **API key:** none needed locally (LLM_API_KEY defaults to "ollama"). Remote-key fallbacks were REMOVED.
+
 - **Three agents:** Vendor Validation (`vendor_validation/`, agentic 4-tool loop), Tender Drafting
   (`tender_drafting/`, structured section-by-section), Evaluation & Ranking (`evaluation/`, two-step) + SOW Extractor (`sow_extractor/`).
 - **Evaluation isolation:** score each vendor ALONE (a vendor must never see another's submission); rank from scores only. Preserve.
