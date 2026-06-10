@@ -28,17 +28,35 @@ from .store import VectorStore
 
 logger = logging.getLogger(__name__)
 
-_SUPPORTED = {".pdf", ".md", ".txt"}
+_SUPPORTED = {".pdf", ".docx", ".md", ".txt"}
+
+
+def _read_docx(path: Path) -> str:
+    """Extract paragraph text from a .docx (a zip of XML) with no extra dependency."""
+    import re
+    import zipfile
+
+    with zipfile.ZipFile(path) as z:
+        xml = z.read("word/document.xml").decode("utf-8", "ignore")
+    # Preserve paragraph breaks, then strip all tags.
+    xml = xml.replace("</w:p>", "\n").replace("<w:tab/>", "\t")
+    text = re.sub(r"<[^>]+>", "", xml)
+    for a, b in (("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"), ("&#160;", " ")):
+        text = text.replace(a, b)
+    return "\n".join(line.strip() for line in text.split("\n") if line.strip())
 
 
 def _read_file(path: Path) -> str:
-    if path.suffix.lower() == ".pdf":
+    suffix = path.suffix.lower()
+    if suffix == ".pdf":
         import fitz  # PyMuPDF — already a project dependency
 
         doc = fitz.open(str(path))
         text = "\n\n".join(page.get_text() for page in doc)
         doc.close()
         return text
+    if suffix == ".docx":
+        return _read_docx(path)
     return path.read_text(encoding="utf-8", errors="ignore")
 
 
