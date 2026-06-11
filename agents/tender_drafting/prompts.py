@@ -8,7 +8,7 @@ prompt is retained for reference / a possible single-call mode. Its text lives i
 from agents.prompts import load_prompt
 
 PROMPT_NAME = "tender_draft_v2"
-PROMPT_VERSION = "3.1.0"
+PROMPT_VERSION = "3.2.0"
 
 SYSTEM_PROMPT = load_prompt("drafting_legacy_full_system")
 

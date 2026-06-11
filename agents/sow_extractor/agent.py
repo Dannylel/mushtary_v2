@@ -157,8 +157,13 @@ class SoWExtractorAgent(BaseAgent):
             logger.error("SoW nested coercion failed: %s", e, extra={"trace_id": trace_id})
             return _FALLBACK_FORM
 
+        # The platform assigns its own tender reference (TND-ID-NNNN) — the source
+        # document's reference belongs to the issuing organisation, not Mushtarry.
+        from agents.tender_ids import next_tender_id
+
+        data["tender_id"] = next_tender_id()
+
         # Required fields with safe defaults
-        data.setdefault("tender_id", "TND-EXTRACTED")
         data.setdefault("buyer_name", "Unknown")
         data.setdefault("buyer_description", data.get("project_objective", ""))
         data.setdefault("payment_terms", "To be agreed")

@@ -30,7 +30,7 @@ from agents.prompts import load_prompt
 logger = logging.getLogger(__name__)
 
 PROMPT_NAME = "form_generator_v1"
-PROMPT_VERSION = "1.1.0"
+PROMPT_VERSION = "1.2.0"
 
 SYSTEM_PROMPT = load_prompt("form_generator_system")
 
@@ -52,12 +52,14 @@ Return only the JSON object.
 
 
 def _fallback_form(seed: str | None) -> TenderBuyerForm:
+    from agents.tender_ids import next_tender_id
+
     title = (seed or "General Services").strip().title()
     category = ALL_CATEGORIES[0]
     subcategory = (CATEGORIES.get(category) or ["General"])[0]
     return TenderBuyerForm(
         tender_title=f"{title} Tender",
-        tender_id="TND-AUTO-001",
+        tender_id=next_tender_id(),
         buyer_name="Mushtarry Auto-Generated Buyer",
         buyer_description=f"Auto-generated draft buyer brief for: {title}.",
         submission_deadline="To be confirmed",
@@ -103,8 +105,12 @@ def _coerce(data: dict) -> dict:
     if isinstance(data.get("submission_controls"), dict):
         data["submission_controls"] = SubmissionControls(**data["submission_controls"])
 
+    # Tender reference is ALWAYS platform-assigned (TND-ID-NNNN) — never model-invented.
+    from agents.tender_ids import next_tender_id
+
+    data["tender_id"] = next_tender_id()
+
     # Required-without-default fields get safe placeholders if the model omitted them.
-    data.setdefault("tender_id", "TND-AUTO-001")
     data.setdefault("buyer_name", "Mushtarry Auto-Generated Buyer")
     data.setdefault("buyer_description", data.get("project_objective", ""))
     data.setdefault("submission_deadline", "To be confirmed")

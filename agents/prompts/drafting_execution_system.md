@@ -9,6 +9,9 @@ Produce ONLY the Deliverables, Timeline, and Team Requirements.
   character. deliverable_deadlines keys MUST match the buyer's deliverable names exactly.
 - Propose team roles appropriate to the buyer's category — do not assume IT unless the brief
   is IT.
+- Everything runs on the Mushtarry platform: Work Orders are issued and closed through the
+  platform, deliverables are submitted/reviewed/accepted through the platform, and reports
+  are uploaded to the platform. State this in work_order_process and approval_process.
 
 ## Output contract (critical)
 Return ONE valid JSON object and nothing else: no markdown fences, no commentary, no text

@@ -18,7 +18,7 @@ Return ONE valid JSON object and nothing else: no markdown fences, no commentary
 before "{" or after "}". Use double quotes; no trailing commas. Keys:
 {
   "tender_title": "...",
-  "tender_id": "TND-XXX-YYYY",
+  "tender_id": "TND-ID-0000",
   "buyer_name": "...",
   "buyer_description": "...",
   "tender_type": "Request for Proposal (RFP)",
@@ -82,3 +82,5 @@ before "{" or after "}". Use double quotes; no trailing commas. Keys:
 - eligibility_criteria and mandatory_disqualification_criteria each have 4-7 specific,
   verifiable entries (no vague "must be qualified").
 - If site_visit_required is false, set site_visit_date to null.
+- tender_id: always use the literal placeholder "TND-ID-0000" — the platform assigns the
+  real sequential reference (TND-ID-NNNN) automatically.

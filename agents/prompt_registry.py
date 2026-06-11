@@ -47,7 +47,7 @@ REGISTRY: dict[str, dict] = {
     },
     "tender_draft_v2": {
         "name": "tender_draft_v2",
-        "version": "3.1.0",
+        "version": "3.2.0",
         "intent": (
             "Generate a full RFP tender draft from a TenderBuyerForm via four parallel "
             "section prompts (context, scope, execution, legal/eval), assembled into one "
@@ -88,7 +88,7 @@ REGISTRY: dict[str, dict] = {
     },
     "form_generator_v1": {
         "name": "form_generator_v1",
-        "version": "1.1.0",
+        "version": "1.2.0",
         "intent": (
             "Autonomously invent a complete, internally-consistent TenderBuyerForm "
             "from a short seed (or nothing), standing in for a real buyer."

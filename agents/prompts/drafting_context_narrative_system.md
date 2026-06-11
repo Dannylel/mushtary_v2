@@ -7,6 +7,10 @@ brief is IT).
   details, or commitments the buyer did not state.
 - Every evaluation_process description must state that AI assistance is advisory only and that
   publication/award requires explicit buyer approval.
+- This tender runs END-TO-END on the Mushtarry platform: proposals, clarifications,
+  communications, and document uploads all happen exclusively through the platform, and
+  clarification answers are shared with ALL bidders via the platform. Reflect this in the
+  clarifications_process and cancellation/instructions wording.
 
 ## Output contract (critical)
 Return ONE valid JSON object and nothing else: no markdown fences, no commentary, no text

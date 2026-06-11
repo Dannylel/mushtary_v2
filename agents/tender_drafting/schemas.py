@@ -297,6 +297,75 @@ class LegalEvalSections(BaseModel):
     annexures: list[str]
 
 
+# ── PLATFORM POLICY (deterministic — never left to the model) ─────────────────
+
+# The standard annexure set every Mushtarry tender carries (reference layout:
+# docs/tender_draft 1.pdf §17). Fixed for uniformity across all tenders.
+STANDARD_ANNEXURES: list[str] = [
+    "Annexure A: Technical Compliance Matrix",
+    "Annexure B: Commercial Pricing Schedule",
+    "Annexure C: Mandatory and Applicable Document Checklist",
+    "Annexure D: Vendor Experience Form",
+    "Annexure E: Key Personnel CV Template",
+    "Annexure F: Implementation Plan and Timeline Template",
+    "Annexure G: Risk and Mitigation Register",
+    "Annexure H: Deviation / Exception Form",
+    "Annexure I: SLA, Warranty, and Support Form",
+    "Annexure J: Bid Security and Performance Bond Templates, if applicable",
+]
+
+# Everything happens ON the Mushtarry platform. These clauses are guaranteed to appear
+# in every draft regardless of what the model wrote.
+_PLATFORM_SUBMISSION_RULE = (
+    "All proposals, clarifications, communications, and document uploads shall be made "
+    "exclusively through the Mushtarry platform; no other channel is accepted."
+)
+_PLATFORM_WORK_ORDER_RULE = (
+    "All Work Orders shall be issued, accepted, tracked, and closed exclusively through "
+    "the Mushtarry platform."
+)
+_PLATFORM_DELIVERABLES_NOTE = (
+    " All deliverables shall be submitted, reviewed, and accepted exclusively through the "
+    "Mushtarry platform; platform records constitute the official record of submission "
+    "and acceptance."
+)
+_PLATFORM_COMPLIANCE_RULE = (
+    "All tender activities — submissions, clarifications, deliverables, acceptance, "
+    "invoicing, and correspondence — shall be conducted on the Mushtarry platform, whose "
+    "timestamps and records are the official record."
+)
+_PLATFORM_INVOICE_RULE = (
+    "Invoices and supporting documents shall be submitted through the Mushtarry platform."
+)
+
+
+def _has_mushtarry(items: list[str]) -> bool:
+    return any("mushtarry" in (i or "").lower() for i in items)
+
+
+def _enforce_platform_policy(draft: "TenderDraft") -> "TenderDraft":
+    """Guarantee the everything-on-Mushtarry clauses appear, wherever the model forgot."""
+    ins = draft.instructions_to_bidders
+    if not _has_mushtarry(ins.submission_rules):
+        ins.submission_rules.insert(0, _PLATFORM_SUBMISSION_RULE)
+
+    dels = draft.deliverables
+    if not _has_mushtarry(dels.work_order_process):
+        dels.work_order_process.insert(0, _PLATFORM_WORK_ORDER_RULE)
+    if "mushtarry" not in (dels.approval_process or "").lower():
+        dels.approval_process = (dels.approval_process or "").rstrip() + _PLATFORM_DELIVERABLES_NOTE
+
+    gt = draft.general_terms
+    if not _has_mushtarry(gt.compliance_requirements):
+        gt.compliance_requirements.append(_PLATFORM_COMPLIANCE_RULE)
+
+    pay = draft.payment_terms
+    if not _has_mushtarry(pay.invoice_requirements):
+        pay.invoice_requirements.append(_PLATFORM_INVOICE_RULE)
+
+    return draft
+
+
 def assemble_tender_draft(
     ctx: ContextSections,
     scope: ScopeSections,
@@ -304,7 +373,7 @@ def assemble_tender_draft(
     legal: LegalEvalSections,
     trace_id: str,
 ) -> "TenderDraft":
-    return TenderDraft(
+    draft = TenderDraft(
         metadata=ctx.metadata,
         tender_data_sheet=ctx.tender_data_sheet,
         introduction=ctx.introduction,
@@ -321,10 +390,12 @@ def assemble_tender_draft(
         confidentiality=legal.confidentiality,
         evaluation_criteria=legal.evaluation_criteria,
         payment_terms=legal.payment_terms,
-        annexures=legal.annexures,
+        # Annexures are the fixed platform-standard set — uniform across all tenders.
+        annexures=list(STANDARD_ANNEXURES),
         ai_generated=True,
         trace_id=trace_id,
     )
+    return _enforce_platform_policy(draft)
 
 
 # ── FULL TENDER DRAFT OUTPUT ──────────────────────────────────────────────────

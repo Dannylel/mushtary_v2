@@ -45,6 +45,9 @@ EXACT shape:
 - 6-10 legal_terms covering at minimum: governing law (KSA), acceptance of conditions, no
   binding relationship until contract signature, buyer reservation rights, indemnification —
   plus the buyer's required security/bond/retention/LD clauses with the exact figures.
+- Everything runs on the Mushtarry platform: invoices and supporting documents are submitted
+  through the platform, and platform records/timestamps are the official record. Reflect
+  this in compliance_requirements and invoice_requirements.
 - Technical parameters must always include completeness, clarity, scope alignment, and
   timeline realism.
 - Each mandatory criterion must be objectively verifiable (pass/fail — no judgment words).

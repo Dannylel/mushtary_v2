@@ -22,6 +22,7 @@ from typing import Any
 
 from agents.buyer_form import TenderBuyerForm
 from agents.tender_drafting.schemas import (
+    STANDARD_ANNEXURES,
     EvaluationSection,
     GeneralTerms,
     LegalEvalSections,
@@ -161,13 +162,9 @@ def _legal_fallback(form: TenderBuyerForm) -> LegalEvalSections:
             ],
             payment_timeline="Approved invoices shall be processed within thirty (30) calendar days of a valid, complete, buyer-approved invoice.",
         ),
-        annexures=[
-            "Annexure A: Technical Compliance Matrix",
-            "Annexure B: Commercial Pricing Schedule",
-            "Annexure C: Mandatory and Applicable Document Checklist",
-            "Annexure D: Key Personnel CV Template",
-            "Annexure E: Deviation / Exception Form",
-        ],
+        # The assembled draft always uses the platform-standard annexure set; this
+        # fallback mirrors it so single-section runs match too.
+        annexures=list(STANDARD_ANNEXURES),
     )
 
 

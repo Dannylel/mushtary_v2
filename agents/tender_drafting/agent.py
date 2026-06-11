@@ -25,7 +25,7 @@ from agents.tender_drafting.sections.scope     import ScopeSectionAgent
 logger = logging.getLogger(__name__)
 
 PROMPT_NAME    = "tender_draft_v2"
-PROMPT_VERSION = "3.1.0"
+PROMPT_VERSION = "3.2.0"
 
 
 class TenderDrafterAgent(BaseAgent):
