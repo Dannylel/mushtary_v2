@@ -106,12 +106,14 @@ def _run_async(job: Job, fn, *args, **kwargs) -> None:
 
 # ── Job worker functions (run inside the background thread) ──────────────────────
 
-def _job_full_draft(seed: str | None, sow_path: str | None) -> dict:
+def _job_full_draft(seed: str | None, sow_path: str | None, sow_text: str | None = None) -> dict:
     """Run the full LangGraph pipeline and render the PDF. Returns artifact + file ids."""
     from agents.graph.modes import run_mode
     from pdf_renderer import build_pdf
 
-    if sow_path:
+    if sow_text:
+        state = run_mode("full", sow_text=sow_text, seed=seed)
+    elif sow_path:
         state = run_mode("full", sow_path=sow_path)
     else:
         state = run_mode("full", seed=seed)
@@ -141,6 +143,13 @@ def _job_extract(sow_path: str) -> dict:
     from agents.graph.modes import run_mode
     form = run_mode("extract", sow_path=sow_path)
     return {"form": form.model_dump(mode="json")}
+
+
+def _job_sow_review(project_name: str, scope_text: str) -> dict:
+    from agents.sow_review import SoWReviewAgent
+
+    review = SoWReviewAgent().run(project_name=project_name, scope_text=scope_text)
+    return {"review": review.model_dump(mode="json")}
 
 
 def _job_validate(payload: dict) -> dict:
@@ -216,6 +225,16 @@ class SeedReq(BaseModel):
     seed: str | None = None
 
 
+class GuidedDraftReq(BaseModel):
+    project_name: str
+    scope_text: str
+
+
+class SowReviewReq(BaseModel):
+    project_name: str = ""
+    scope_text: str
+
+
 class ValidateReq(BaseModel):
     vendor_id: str = "VND-DEMO-001"
     cr_number: str
@@ -231,6 +250,24 @@ class ValidateReq(BaseModel):
 def start_draft(req: SeedReq):
     job = _new_job("draft")
     _run_async(job, _job_full_draft, req.seed or None, None)
+    return {"job_id": job.id}
+
+
+@app.post("/api/jobs/draft-guided")
+def start_guided_draft(req: GuidedDraftReq):
+    scope_text = (
+        f"Project Name: {req.project_name.strip()}\n\n"
+        f"Scope of Work:\n{req.scope_text.strip()}"
+    )
+    job = _new_job("guided draft")
+    _run_async(job, _job_full_draft, req.project_name.strip() or None, None, scope_text)
+    return {"job_id": job.id}
+
+
+@app.post("/api/jobs/sow-review")
+def start_sow_review(req: SowReviewReq):
+    job = _new_job("sow review")
+    _run_async(job, _job_sow_review, req.project_name, req.scope_text)
     return {"job_id": job.id}
 
 

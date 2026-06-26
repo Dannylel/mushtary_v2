@@ -104,6 +104,32 @@
           </div>
           <div class="hint">⏱ Runs locally on a 7B model — a full tender takes a few minutes. Watch the model write live in the activity console below.</div>
         </div>
+        <div class="panel">
+          <div class="result-head">
+            <div>
+              <div class="result-title">Project + SoW Guided Mode</div>
+              <div class="hint">Write the project name and scope, ask Qwen to evaluate/rewrite the scope, then generate the tender from the approved scope.</div>
+            </div>
+            <span class="badge ok">new mode</span>
+          </div>
+          <div class="grid two">
+            <div>
+              <label class="field-label">Project name</label>
+              <input id="guidedProjectName" class="input" placeholder="e.g. National Clinic Queue Management System" />
+            </div>
+            <div>
+              <label class="field-label">Current status</label>
+              <div class="hint" id="guidedStatus">Draft or paste the scope, then review/rewrite it before drafting.</div>
+            </div>
+          </div>
+          <label class="field-label" style="margin-top:16px">Scope of work</label>
+          <textarea id="guidedScope" class="input textarea" placeholder="Paste or write the buyer's scope of work here..."></textarea>
+          <div class="toolbar" style="margin-top:14px">
+            <button id="reviewSowBtn" class="btn ghost">Evaluate / Rewrite SoW</button>
+            <button id="guidedDraftBtn" class="btn primary">Generate Tender From Approved SoW</button>
+          </div>
+        </div>
+        <div id="sowReviewResult"></div>
         <div id="draftResult"></div>
       </section>
 

@@ -182,7 +182,7 @@ The vendor types their legal name; the agent compares it against what Amaly retu
 ## General / Infrastructure
 
 #### LLM Provider — ✅ Resolved
-- Using **local Ollama** (OpenAI-compatible endpoint via LangChain `ChatOpenAI`) — default model `qwen2.5:7b-instruct-q4_K_M`
+- Using **local Ollama** (OpenAI-compatible endpoint via LangChain `ChatOpenAI`) — default model `qwen3:4b`
 - No API key needed locally; configuration lives in `agents/llm_config.py` (env: `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY`)
 - RAG embeddings: `qwen3-embedding:0.6b` on the same endpoint (`agents/rag/config.py`)
 
@@ -212,7 +212,7 @@ The vendor types their legal name; the agent compares it against what Amaly retu
 | 14 | Policy limit (2 per org) + Admin-only management | Client | ✅ Done |
 | 15 | VRI initialisation for new vendors | Client / Product | ❌ Needed |
 | 16 | Sample vendor submission + tender bid | Client | ❌ Promised via email |
-| 17 | LLM provider | Engineering | ✅ Local Ollama (qwen2.5:7b-instruct) |
+| 17 | LLM provider | Engineering | ✅ Local Ollama (qwen3:4b) |
 | 18 | Data localisation | Legal / Client | ✅ Resolved (fully local — no data leaves the machine) |
 
 ---

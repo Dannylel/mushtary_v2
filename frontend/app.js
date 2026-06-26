@@ -13,6 +13,8 @@ const DOC_TYPES = [
   ["other", "Other"],
 ];
 
+let lastHealthPromptPatch = null;
+
 // ── Navigation ────────────────────────────────────────────────────────────────
 function show(view) {
   $$(".nav-item").forEach(b => b.classList.toggle("active", b.dataset.view === view));
@@ -162,6 +164,44 @@ function docList(title, docs) {
 }
 
 // ── DRAFT: render the full 18-section tender (mirrors the PDF layout) ───────────
+function buildHealthPromptPatch(form, ti) {
+  if (!ti || ti.tender_quality_score == null) return null;
+  const title = form.tender_title || "Tender";
+  const baseScope = form.scope_of_work || form.project_objective || "";
+  const findings = (ti.findings || [])
+    .filter(f => ["high", "medium"].includes(String(f.severity || "").toLowerCase()))
+    .slice(0, 6);
+  const missing = (ti.missing_or_weak_requirements || []).slice(0, 6);
+  const recommendations = findings.map(f => f.recommendation).filter(Boolean);
+  const patchLines = [
+    "Health feedback to address before regenerating:",
+    ...missing.map(x => `- Add/clarify: ${x}`),
+    ...recommendations.map(x => `- ${x}`),
+  ];
+
+  return {
+    projectName: title,
+    scopeText: [
+      baseScope || `Scope of work for ${title}.`,
+      "",
+      patchLines.join("\n"),
+      "",
+      "Keep the original buyer intent. Do not rewrite unrelated commercial or compliance sections unless needed. Focus the next draft on improving the project objective, deliverables, acceptance criteria, timeline, and mandatory document requirements.",
+    ].join("\n"),
+  };
+}
+
+function applyHealthPromptPatch() {
+  if (!lastHealthPromptPatch) return;
+  $("#guidedProjectName").value = lastHealthPromptPatch.projectName || "";
+  $("#guidedScope").value = lastHealthPromptPatch.scopeText || "";
+  $("#guidedStatus").textContent = "Health feedback applied to the existing prompt. Review the additions, then generate again.";
+  $("#sowReviewResult").innerHTML = "";
+  show("draft");
+  $("#guidedScope").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+window.applyHealthPromptPatch = applyHealthPromptPatch;
+
 function renderDraft(result) {
   const artifact = result.artifact || {};
   const o = artifact.output || {};
@@ -183,8 +223,44 @@ function renderDraft(result) {
   const terms = o.general_terms || {};
   const ev = o.evaluation_criteria || {};
   const pay = o.payment_terms || {};
+  const ti = o.tender_intelligence || {};
 
   const sections = [];
+
+  if (ti.tender_quality_score != null) {
+    lastHealthPromptPatch = buildHealthPromptPatch(form, ti);
+    const findings = (ti.findings || []).map(f => {
+      const head = [f.area, f.severity].filter(Boolean).join(" · ");
+      return `<b>${esc(head)}</b>${f.issue ? " — " + esc(f.issue) : ""}${f.evidence ? "<br><span class='muted2'>Evidence: " + esc(f.evidence) + "</span>" : ""}${f.recommendation ? "<br><span class='muted2'>Recommendation: " + esc(f.recommendation) + "</span>" : ""}`;
+    });
+    const healthAgents = (ti.health_agents || []).map(a =>
+      `<b>${esc(a.agent_name || "Health Agent")}: ${esc(a.score ?? "—")}/100</b><br>` +
+      `<span class="muted2">${esc(a.role || "")}</span>` +
+      `${a.summary ? `<p style="margin:6px 0 0">${esc(a.summary)}</p>` : ""}` +
+      sub("Reasoning", ul(a.reasoning_summary || [])) +
+      ul(a.signals || [])
+    );
+    sections.push(block("AI", "Tender Health Score",
+      kv([
+        ["Tender Quality Score", `${ti.tender_quality_score}/100`],
+        ["Scope Clarity", `${ti.scope_clarity}%`],
+        ["Commercial Clarity", `${ti.commercial_clarity}%`],
+        ["Compliance Readiness", `${ti.compliance_readiness}%`],
+        ["Vendor Participation Score", `${ti.vendor_participation_score ?? "—"}%`],
+        ["Risk of Vendor Questions", ti.risk_of_vendor_questions],
+        ["Estimated Vendor Participation", ti.estimated_vendor_participation],
+        ["Publish Readiness", ti.publish_readiness],
+        ["Document Status", ti.document_status],
+      ]) +
+      sub("AI Review Summary", para(ti.improvement_summary)) +
+      sub("Committee Reasoning", ul(ti.committee_reasoning)) +
+      sub("Tender Health Agent Committee", ul(healthAgents, x => x)) +
+      sub("Strengths", ul(ti.strengths)) +
+      sub("Findings and Recommended Improvements", ul(findings, x => x)) +
+      sub("Missing or Weak Requirements", ul(ti.missing_or_weak_requirements)) +
+      `<div class="toolbar" style="margin-top:14px"><button class="btn ghost" onclick="applyHealthPromptPatch()">Apply Health Feedback to Prompt</button></div>`
+    ));
+  }
 
   // 1. Tender Data Sheet
   sections.push(block(1, "Tender Data Sheet", kv([
@@ -345,7 +421,7 @@ function renderDraft(result) {
     <div class="result-head">
       <div>
         <div class="result-title">${esc(meta.title || "Tender Draft")}</div>
-        <div class="hint" style="margin-top:4px">Reference: ${esc(meta.tender_id || "—")} · Issued by ${esc(meta.buyer_entity || "—")}</div>
+        <div class="hint" style="margin-top:4px">Reference: ${esc(meta.tender_id || "—")} · Issued by ${esc(meta.buyer_entity || "—")}${ti.tender_quality_score != null ? " · Health " + esc(ti.tender_quality_score) + "/100" : ""}</div>
       </div>
       <span class="badge draft dot">DRAFT · pending buyer approval</span>
     </div>
@@ -373,6 +449,74 @@ $("#draftBtn").addEventListener("click", () => {
 });
 
 // ── EXTRACT (and full pipeline from SOW) ─────────────────────────────────────────
+function renderSowReview(result) {
+  const r = (result && result.review) || {};
+  const badge = r.readiness === "ready" ? "ok" : r.readiness === "weak" ? "bad" : "warn";
+  return `<div class="result">
+    <div class="section-block">
+      <div class="sb-head"><span class="num">S</span>SoW Review</div>
+      <div class="sb-body prose">
+        <div class="result-head">
+          <div>
+            <div class="result-title">${esc(r.score ?? "-")}/100</div>
+            <div class="hint">${esc(r.summary || "")}</div>
+          </div>
+          <span class="badge ${badge} dot">${esc(r.readiness || "needs_review")}</span>
+        </div>
+        ${sub("Strengths", ul(r.strengths))}
+        ${sub("Gaps", ul(r.gaps))}
+        ${sub("Recommendations", ul(r.recommendations))}
+        ${sub("Rewritten Scope", para(r.rewritten_scope))}
+      </div>
+    </div>
+  </div>`;
+}
+
+$("#reviewSowBtn").addEventListener("click", () => {
+  const project_name = $("#guidedProjectName").value.trim();
+  const scope_text = $("#guidedScope").value.trim();
+  if (!scope_text) {
+    $("#sowReviewResult").innerHTML = errorHTML("Write the scope of work first.");
+    return;
+  }
+  runJob({
+    target: "#sowReviewResult",
+    loadMain: "Reviewing the scope of work...",
+    loadSub: "Qwen is checking clarity, deliverables, timeline, responsibilities, and acceptance criteria",
+    start: () => fetch("/api/jobs/sow-review", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project_name, scope_text }),
+    }).then(r => r.json()),
+    render: result => {
+      const rewritten = result && result.review && result.review.rewritten_scope;
+      if (rewritten) {
+        $("#guidedScope").value = rewritten;
+        $("#guidedStatus").textContent = "Scope rewritten. Edit it if needed, then generate the tender.";
+      }
+      return renderSowReview(result);
+    },
+  });
+});
+
+$("#guidedDraftBtn").addEventListener("click", () => {
+  const project_name = $("#guidedProjectName").value.trim();
+  const scope_text = $("#guidedScope").value.trim();
+  if (!project_name || !scope_text) {
+    $("#draftResult").innerHTML = errorHTML("Add both the project name and scope of work first.");
+    return;
+  }
+  runJob({
+    target: "#draftResult",
+    loadMain: "Drafting tender from approved SoW...",
+    loadSub: "Extracting buyer form, then running the expert tender section agents",
+    start: () => fetch("/api/jobs/draft-guided", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project_name, scope_text }),
+    }).then(r => r.json()),
+    render: renderDraft,
+  });
+});
+
 const dropZone = $("#dropZone"), extractFile = $("#extractFile");
 let pickedFile = null;
 dropZone.addEventListener("click", () => extractFile.click());

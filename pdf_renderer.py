@@ -106,30 +106,51 @@ def _format_percent(value: Any) -> str:
 
 
 class TenderPDF(FPDF):
+    def __init__(self, doc_title: str = "", tender_ref: str = "", status: str = "DRAFT - Pending Buyer Approval"):
+        super().__init__()
+        self.doc_title = doc_title
+        self.tender_ref = tender_ref
+        self.status = status
+
     def header(self):
+        if self.page_no() == 1:
+            return
+
+        self.set_text_color(235, 235, 235)
+        self.set_font("Helvetica", "B", 42)
+        self.set_xy(54, 132)
+        self.cell(100, 18, _safe_text("DRAFT"), align="C")
+
+        self.set_y(10)
+        self.set_text_color(35, 45, 70)
+        self.set_draw_color(36, 73, 118)
+        self.set_line_width(0.35)
         self.set_x(self.l_margin)
-        self.set_font("Helvetica", "B", 9)
-        self.cell(
-            0,
-            6,
-            _safe_text("Mushtarry | AI-Generated Tender Draft | DRAFT - Pending Buyer Approval"),
-            new_x=XPos.LMARGIN,
-            new_y=YPos.NEXT,
-            align="C",
-        )
-        self.ln(2)
+        self.set_font("Helvetica", "B", 8.5)
+        left = self.tender_ref or "Tender Reference"
+        right = self.status
+        self.cell(55, 6, _safe_text(left), align="L")
+        self.cell(0, 6, _safe_text(right), new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="R")
+        self.line(self.l_margin, self.get_y(), self.w - self.r_margin, self.get_y())
+        self.ln(5)
         self.set_x(self.l_margin)
 
     def footer(self):
+        if self.page_no() == 1:
+            return
+
         self.set_y(-14)
         self.set_x(self.l_margin)
+        self.set_draw_color(185, 195, 210)
+        self.line(self.l_margin, self.get_y(), self.w - self.r_margin, self.get_y())
+        self.ln(1)
+        self.set_text_color(75, 85, 105)
         self.set_font("Helvetica", "", 8)
-        self.cell(
-            0,
-            8,
-            _safe_text(f"Page {self.page_no()} | AI-generated - not published until Buyer-Admin approval"),
-            align="C",
-        )
+        self.cell(58, 7, _safe_text("Mushtarry AI Tender Package"), align="L")
+        self.cell(0, 7, _safe_text(f"Page {self.page_no()}"), align="C")
+        self.set_x(-72)
+        self.cell(54, 7, _safe_text("Buyer approval required"), align="R")
+        self.set_text_color(0, 0, 0)
 
 
 def _ensure_space(pdf: TenderPDF, min_height: float = 18):
@@ -143,10 +164,13 @@ def _write_section(pdf: TenderPDF, title: str):
     pdf.set_x(pdf.l_margin)
     pdf.ln(4)
     pdf.set_x(pdf.l_margin)
-    pdf.set_font("Helvetica", "B", 13)
-    pdf.multi_cell(0, 7, _safe_text(title))
+    pdf.set_fill_color(36, 73, 118)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.multi_cell(0, 8, _safe_text(title), fill=True)
+    pdf.set_text_color(0, 0, 0)
     pdf.set_x(pdf.l_margin)
-    pdf.ln(1)
+    pdf.ln(2)
 
 
 def _write_subsection(pdf: TenderPDF, title: str):
@@ -154,8 +178,10 @@ def _write_subsection(pdf: TenderPDF, title: str):
     pdf.set_x(pdf.l_margin)
     pdf.ln(2)
     pdf.set_x(pdf.l_margin)
-    pdf.set_font("Helvetica", "B", 11)
+    pdf.set_text_color(36, 73, 118)
+    pdf.set_font("Helvetica", "B", 10.5)
     pdf.multi_cell(0, 6, _safe_text(title))
+    pdf.set_text_color(0, 0, 0)
     pdf.set_x(pdf.l_margin)
 
 
@@ -187,28 +213,37 @@ def _write_bullets(pdf: TenderPDF, items: list[Any]):
 
 
 def _write_key_value_table(pdf: TenderPDF, rows: list[tuple[str, Any]]):
-    left_w = 58
-    right_w = 125
+    left_w = 62
+    right_w = pdf.w - pdf.l_margin - pdf.r_margin - left_w
 
     for key, value in rows:
+        if value is None:
+            value = ""
+
         _ensure_space(pdf, 16)
         pdf.set_x(pdf.l_margin)
 
         x = pdf.get_x()
         y = pdf.get_y()
 
+        pdf.set_draw_color(175, 185, 200)
+        pdf.set_fill_color(236, 240, 245)
+        pdf.set_text_color(35, 45, 70)
         pdf.set_font("Helvetica", "B", 9)
-        pdf.multi_cell(left_w, 6, _safe_text(key), border=1)
+        pdf.multi_cell(left_w, 6, _safe_text(key), border=1, fill=True)
         left_h = pdf.get_y() - y
 
         pdf.set_xy(x + left_w, y)
+        pdf.set_fill_color(255, 255, 255)
+        pdf.set_text_color(25, 25, 25)
         pdf.set_font("Helvetica", "", 9)
-        pdf.multi_cell(right_w, 6, _safe_text(value), border=1)
+        pdf.multi_cell(right_w, 6, _safe_text(value), border=1, fill=True)
         right_h = pdf.get_y() - y
 
         pdf.set_y(y + max(left_h, right_h))
         pdf.set_x(pdf.l_margin)
 
+    pdf.set_text_color(0, 0, 0)
     pdf.set_x(pdf.l_margin)
     pdf.ln(2)
 
@@ -251,6 +286,177 @@ def _write_document_table(pdf: TenderPDF, title: str, docs: list[Any]):
     pdf.ln(1)
 
 
+def _write_cover_page(pdf: TenderPDF, d: dict, metadata: dict, tender_data_sheet: dict, intelligence: dict):
+    status = "DRAFT - PENDING BUYER APPROVAL"
+    generated_at = intelligence.get("generated_at") or datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+    pdf.set_fill_color(247, 249, 252)
+    pdf.rect(0, 0, pdf.w, pdf.h, style="F")
+    pdf.set_draw_color(36, 73, 118)
+    pdf.set_line_width(1.0)
+    pdf.rect(12, 12, pdf.w - 24, pdf.h - 24)
+
+    pdf.set_xy(18, 22)
+    pdf.set_draw_color(140, 155, 175)
+    pdf.set_fill_color(255, 255, 255)
+    pdf.rect(18, 22, 36, 24, style="DF")
+    pdf.set_xy(18, 30)
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_text_color(80, 90, 110)
+    pdf.cell(36, 6, _safe_text("Buyer Logo"), align="C")
+
+    pdf.set_xy(60, 24)
+    pdf.set_text_color(35, 45, 70)
+    pdf.set_font("Helvetica", "B", 14)
+    pdf.multi_cell(126, 7, _safe_text(metadata.get("buyer_entity") or tender_data_sheet.get("buyer_entity") or "Buyer Entity"))
+    pdf.set_x(60)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(90, 100, 120)
+    pdf.multi_cell(126, 5, _safe_text("Formal tender package generated by Mushtarry AI for Buyer-Admin review."))
+
+    pdf.set_xy(18, 70)
+    pdf.set_text_color(36, 73, 118)
+    pdf.set_font("Helvetica", "B", 19)
+    pdf.multi_cell(0, 9, _safe_text("REQUEST FOR PROPOSAL"), align="C")
+    pdf.ln(3)
+    pdf.set_x(24)
+    pdf.set_text_color(25, 35, 55)
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.multi_cell(pdf.w - 48, 8, _safe_text(metadata.get("title") or tender_data_sheet.get("tender_title") or "Tender Draft"), align="C")
+
+    pdf.ln(6)
+    pdf.set_x(52)
+    pdf.set_fill_color(255, 245, 226)
+    pdf.set_draw_color(205, 145, 54)
+    pdf.set_text_color(120, 75, 15)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(106, 9, _safe_text(status), border=1, align="C", fill=True)
+    pdf.set_text_color(0, 0, 0)
+
+    pdf.ln(15)
+    _write_key_value_table(
+        pdf,
+        [
+            ("Tender Reference Number", metadata.get("tender_id") or tender_data_sheet.get("tender_reference", "")),
+            ("Issue Date", metadata.get("issue_date") or tender_data_sheet.get("issue_date", "")),
+            ("Submission Deadline", tender_data_sheet.get("submission_deadline", "")),
+            ("Document Version", "Version 1.0 - AI Draft"),
+            ("Generated Date", generated_at),
+            ("Trace ID", d.get("trace_id", "")),
+            ("Document Status", "Draft / Not Published"),
+        ],
+    )
+
+    if intelligence:
+        pdf.ln(2)
+        _write_key_value_table(
+            pdf,
+            [
+                ("AI Tender Health Score", f"{intelligence.get('tender_quality_score', '')}/100"),
+                ("Health Agents", str(len(intelligence.get("health_agents", [])) or 4)),
+                ("Risk of Vendor Questions", intelligence.get("risk_of_vendor_questions", "")),
+                ("Estimated Vendor Participation", intelligence.get("estimated_vendor_participation", "")),
+            ],
+        )
+
+    pdf.set_y(238)
+    pdf.set_x(24)
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_text_color(36, 73, 118)
+    pdf.multi_cell(0, 5, _safe_text("Confidentiality Notice"))
+    pdf.set_x(24)
+    pdf.set_font("Helvetica", "", 8.5)
+    pdf.set_text_color(70, 78, 92)
+    pdf.multi_cell(
+        pdf.w - 48,
+        5,
+        _safe_text(
+            "This document is confidential and intended only for authorized buyer review. "
+            "It was generated by Mushtarry AI and cannot be issued, published, or used for award "
+            "until approved by the Buyer-Admin."
+        ),
+    )
+    pdf.set_text_color(0, 0, 0)
+
+
+def _write_tender_health(pdf: TenderPDF, intelligence: dict):
+    if not intelligence:
+        return
+
+    pdf.add_page()
+    _write_section(pdf, "Executive Intelligence Summary")
+    _write_key_value_table(
+        pdf,
+        [
+            ("Tender Quality Score", f"{intelligence.get('tender_quality_score', '')}/100"),
+            ("Scope Clarity", f"{intelligence.get('scope_clarity', '')}%"),
+            ("Commercial Clarity", f"{intelligence.get('commercial_clarity', '')}%"),
+            ("Compliance Readiness", f"{intelligence.get('compliance_readiness', '')}%"),
+            ("Vendor Participation Score", f"{intelligence.get('vendor_participation_score', '')}%"),
+            ("Risk of Vendor Questions", intelligence.get("risk_of_vendor_questions", "")),
+            ("Estimated Vendor Participation", intelligence.get("estimated_vendor_participation", "")),
+            ("Publish Readiness", intelligence.get("publish_readiness", "")),
+            ("Document Status", intelligence.get("document_status", "")),
+        ],
+    )
+
+    _write_subsection(pdf, "AI Review Summary")
+    _write_para(pdf, intelligence.get("improvement_summary", ""))
+
+    committee_reasoning = intelligence.get("committee_reasoning", [])
+    if committee_reasoning:
+        _write_subsection(pdf, "Committee Reasoning")
+        _write_bullets(pdf, committee_reasoning)
+
+    health_agents = intelligence.get("health_agents", [])
+    if health_agents:
+        _write_subsection(pdf, "Tender Health Agent Committee")
+        for item in health_agents:
+            agent = _as_dict(item)
+            _write_key_value_table(
+                pdf,
+                [
+                    ("Agent", agent.get("agent_name", "")),
+                    ("Role", agent.get("role", "")),
+                    ("Score", f"{agent.get('score', '')}/100"),
+                    ("Risk Level", agent.get("risk_level", "")),
+                    ("Summary", agent.get("summary", "")),
+                ],
+            )
+            reasoning = agent.get("reasoning_summary", [])
+            if reasoning:
+                _write_subsection(pdf, "Visible Reasoning")
+                _write_bullets(pdf, reasoning)
+            signals = agent.get("signals", [])
+            if signals:
+                _write_subsection(pdf, "Signals")
+                _write_bullets(pdf, signals)
+
+    _write_subsection(pdf, "Strengths")
+    _write_bullets(pdf, intelligence.get("strengths", []))
+
+    findings = intelligence.get("findings", [])
+    if findings:
+        _write_subsection(pdf, "Findings and Recommended Improvements")
+        for item in findings:
+            f = _as_dict(item)
+            _write_key_value_table(
+                pdf,
+                [
+                    ("Area", f.get("area", "")),
+                    ("Severity", f.get("severity", "")),
+                    ("Issue", f.get("issue", "")),
+                    ("Evidence", f.get("evidence", "")),
+                    ("Recommendation", f.get("recommendation", "")),
+                ],
+            )
+
+    weak = intelligence.get("missing_or_weak_requirements", [])
+    if weak:
+        _write_subsection(pdf, "Missing or Weak Requirements")
+        _write_bullets(pdf, weak)
+
+
 def _write_toc(pdf: TenderPDF):
     pdf.add_page()
     pdf.set_x(pdf.l_margin)
@@ -262,21 +468,22 @@ def _write_toc(pdf: TenderPDF):
     _write_bullets(
         pdf,
         [
+            "Executive Intelligence Summary",
             "1. Tender Data Sheet",
             "2. Introduction",
             "3. Instructions to Bidders",
             "4. Award and Contract",
-            "5. Vendor Document Requirements",
-            "6. Proposal Packaging and Format",
+            "5. Eligibility and Vendor Document Requirements",
+            "6. Proposal Submission Requirements",
             "7. Project Overview",
             "8. Objectives",
             "9. Scope of Work",
             "10. Deliverables",
             "11. Timeline",
             "12. Team Requirements",
-            "13. General and Special Terms",
+            "13. General Terms and Conditions",
             "14. Confidentiality",
-            "15. Evaluation Methodology",
+            "15. Technical and Financial Evaluation Methodology",
             "16. Payment Terms",
             "17. Annexures",
             "18. Buyer Approval",
@@ -303,62 +510,20 @@ def build_pdf(draft: Any, output_path: Path = OUTPUT_PDF):
     evaluation = d.get("evaluation_criteria", {})
     payment = d.get("payment_terms", {})
     annexures = d.get("annexures", [])
+    intelligence = d.get("tender_intelligence", {})
 
-    pdf = TenderPDF()
+    pdf = TenderPDF(
+        doc_title=metadata.get("title", ""),
+        tender_ref=metadata.get("tender_id") or tender_data_sheet.get("tender_reference", ""),
+    )
+    pdf.set_margins(18, 18, 18)
     pdf.set_auto_page_break(auto=True, margin=16)
     pdf.add_page()
 
-    pdf.set_x(pdf.l_margin)
-    pdf.set_font("Helvetica", "B", 18)
-    pdf.multi_cell(0, 10, _safe_text("REQUEST FOR PROPOSAL"), align="C")
-    pdf.set_x(pdf.l_margin)
-    pdf.ln(4)
-
-    pdf.set_x(pdf.l_margin)
-    pdf.set_font("Helvetica", "B", 14)
-    pdf.multi_cell(0, 8, _safe_text(metadata.get("title", "Request for Proposal")), align="C")
-    pdf.set_x(pdf.l_margin)
-    pdf.ln(2)
-
-    _write_key_value_table(
-        pdf,
-        [
-            ("Tender Reference", metadata.get("tender_id", "")),
-            ("Issued By", metadata.get("buyer_entity", "")),
-            ("Issue Date", metadata.get("issue_date", "")),
-            ("Submission Deadline", tender_data_sheet.get("submission_deadline", "")),
-            ("Proposal Validity", tender_data_sheet.get("proposal_validity", "")),
-            ("Bid Security", tender_data_sheet.get("bid_security", "")),
-            ("Performance Bond", tender_data_sheet.get("performance_bond", "")),
-            ("Evaluation Model", tender_data_sheet.get("evaluation_model", "")),
-            ("Minimum Technical Score", tender_data_sheet.get("minimum_technical_score", "")),
-            (
-                "AI Governance",
-                "This tender was generated by Mushtarry AI and must be reviewed and approved by Buyer-Admin before publication.",
-            ),
-            ("Generated", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")),
-            ("Trace ID", d.get("trace_id", "")),
-        ],
-    )
-
-    pdf.ln(6)
-
-    pdf.set_x(pdf.l_margin)
-    pdf.set_font("Helvetica", "B", 11)
-    pdf.multi_cell(0, 6, _safe_text("PENDING BUYER APPROVAL"))
-
-    pdf.set_x(pdf.l_margin)
-    pdf.set_font("Helvetica", "", 10)
-    pdf.multi_cell(
-        0,
-        6,
-        _safe_text(
-            "This tender cannot be published until reviewed and approved by the authorized Buyer-Admin."
-        ),
-    )
-    pdf.set_x(pdf.l_margin)
+    _write_cover_page(pdf, d, metadata, tender_data_sheet, intelligence)
 
     _write_toc(pdf)
+    _write_tender_health(pdf, intelligence)
 
     pdf.add_page()
 
@@ -492,7 +657,7 @@ def build_pdf(draft: Any, output_path: Path = OUTPUT_PDF):
     _write_subsection(pdf, "4.6 Saudization Requirements")
     _write_para(pdf, award.get("saudization_requirements", ""))
 
-    _write_section(pdf, "5. Vendor Document Requirements")
+    _write_section(pdf, "5. Eligibility and Vendor Document Requirements")
     _write_subsection(pdf, "5.1 Document Governance Rules")
     _write_bullets(pdf, award.get("vendor_document_rules", []))
     _write_subsection(pdf, "5.2 Documents Required for this Tender")
@@ -504,7 +669,7 @@ def build_pdf(draft: Any, output_path: Path = OUTPUT_PDF):
 
     pdf.add_page()
 
-    _write_section(pdf, "6. Proposal Packaging and Format")
+    _write_section(pdf, "6. Proposal Submission Requirements")
     _write_para(pdf, proposal_format.get("submission_method", ""))
 
     technical_proposal = proposal_format.get("technical_proposal", {})
@@ -639,7 +804,7 @@ def build_pdf(draft: Any, output_path: Path = OUTPUT_PDF):
     _write_subsection(pdf, "Saudization")
     _write_para(pdf, team.get("saudization_note", ""))
 
-    _write_section(pdf, "13. General and Special Terms")
+    _write_section(pdf, "13. General Terms and Conditions")
     _write_subsection(pdf, "13.1 Legal Terms")
     _write_bullets(pdf, terms.get("legal_terms", []))
     _write_subsection(pdf, "13.2 Compliance Requirements")
@@ -654,7 +819,7 @@ def build_pdf(draft: Any, output_path: Path = OUTPUT_PDF):
 
     pdf.add_page()
 
-    _write_section(pdf, "15. Evaluation Methodology")
+    _write_section(pdf, "15. Technical and Financial Evaluation Methodology")
     _write_key_value_table(
         pdf,
         [
@@ -702,7 +867,17 @@ def build_pdf(draft: Any, output_path: Path = OUTPUT_PDF):
     pdf.add_page()
 
     _write_section(pdf, "18. Buyer Approval")
-    _write_para(pdf, "PENDING BUYER APPROVAL - This tender cannot be published until approved below.")
+    _write_para(pdf, "PENDING BUYER APPROVAL - This tender cannot be published until approved by the authorized Buyer-Admin.")
+    _write_key_value_table(
+        pdf,
+        [
+            ("Document Version", "Version 1.0 - AI Draft"),
+            ("Document Status", "Draft / Pending Buyer Approval"),
+            ("Generated Date", intelligence.get("generated_at") or datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")),
+            ("Trace ID", d.get("trace_id", "")),
+            ("Publication Control", "Publication, award, rejection, and vendor notification remain blocked until Buyer-Admin approval."),
+        ],
+    )
     pdf.ln(8)
     _write_key_value_table(
         pdf,
@@ -710,8 +885,23 @@ def build_pdf(draft: Any, output_path: Path = OUTPUT_PDF):
             ("Reviewed & Approved By", ""),
             ("Role", "Buyer-Admin"),
             ("Date", ""),
-            ("Signature / Stamp", ""),
         ],
     )
+
+    _ensure_space(pdf, 42)
+    pdf.set_x(pdf.l_margin)
+    pdf.set_draw_color(120, 135, 155)
+    pdf.set_fill_color(255, 255, 255)
+    box_w = (pdf.w - pdf.l_margin - pdf.r_margin - 10) / 2
+    y = pdf.get_y()
+    pdf.rect(pdf.l_margin, y, box_w, 32)
+    pdf.rect(pdf.l_margin + box_w + 10, y, box_w, 32)
+    pdf.set_xy(pdf.l_margin, y + 12)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.set_text_color(90, 100, 120)
+    pdf.cell(box_w, 6, _safe_text("Signature"), align="C")
+    pdf.set_xy(pdf.l_margin + box_w + 10, y + 12)
+    pdf.cell(box_w, 6, _safe_text("Official Stamp"), align="C")
+    pdf.set_text_color(0, 0, 0)
 
     pdf.output(str(output_path))

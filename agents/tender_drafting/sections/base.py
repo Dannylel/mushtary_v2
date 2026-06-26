@@ -72,7 +72,16 @@ class BaseSectionAgent:
             if text.startswith("json"):
                 text = text[4:]
         try:
-            return json.loads(text.strip())
+            parsed = json.loads(text.strip())
         except json.JSONDecodeError as e:
             logger.error("%s JSON parse failed: %s", self.__class__.__name__, e)
             return {}
+        if isinstance(parsed, dict):
+            return parsed
+        if isinstance(parsed, list):
+            first_dict = next((item for item in parsed if isinstance(item, dict)), None)
+            if first_dict is not None:
+                logger.warning("%s returned a JSON list; using the first object", self.__class__.__name__)
+                return first_dict
+        logger.error("%s JSON root must be an object, got %s", self.__class__.__name__, type(parsed).__name__)
+        return {}

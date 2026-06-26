@@ -64,6 +64,14 @@ class SoWExtractorAgent(BaseAgent):
         raw_text = self._read_pdf(pdf_path)
         return self._extract(raw_text, hint_category)
 
+    def run(
+        self,
+        raw_text: str,
+        hint_category: str | None = None,
+    ) -> TenderBuyerForm:  # type: ignore[override]
+        """BaseAgent entry point for text-based SoW extraction."""
+        return self.extract_from_text(raw_text, hint_category)
+
     def extract_from_text(
         self,
         raw_text: str,

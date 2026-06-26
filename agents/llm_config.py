@@ -7,7 +7,7 @@ models or pointing at a remote endpoint never requires touching agent code.
 
 Environment variables (all optional — sensible local defaults applied):
     LLM_BASE_URL   OpenAI-compatible endpoint. Default: http://localhost:11434/v1 (Ollama)
-    LLM_MODEL      Model id/tag served by that endpoint. Default: qwen2.5:7b-instruct
+    LLM_MODEL      Model id/tag served by that endpoint. Default: qwen3:4b
     LLM_API_KEY    API key. Local servers ignore it, but the openai SDK needs a non-empty
                    string. Default: "ollama".
 
@@ -19,20 +19,35 @@ import os
 
 # ── Local defaults (Ollama) ────────────────────────────────────────────────────
 DEFAULT_BASE_URL = "http://localhost:11434/v1"
-DEFAULT_MODEL = "qwen2.5:7b-instruct-q4_K_M"
+DEFAULT_MODEL = "qwen3:4b"
 DEFAULT_API_KEY = "ollama"
+GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+GEMINI_MODEL = "gemini-3.5-flash"
+
+
+def get_provider() -> str:
+    return (os.getenv("LLM_PROVIDER") or "ollama").strip().lower()
 
 
 def get_base_url() -> str:
+    if get_provider() == "gemini":
+        return os.getenv("GEMINI_BASE_URL") or GEMINI_BASE_URL
     return os.getenv("LLM_BASE_URL") or DEFAULT_BASE_URL
 
 
 def get_model() -> str:
+    if get_provider() == "gemini":
+        return os.getenv("GEMINI_MODEL") or GEMINI_MODEL
     return os.getenv("LLM_MODEL") or DEFAULT_MODEL
 
 
 def get_api_key() -> str:
-    # Local-only: a single explicit env var; "ollama" placeholder satisfies the SDK.
+    if get_provider() == "gemini":
+        key = os.getenv("GEMINI_API_KEY")
+        if not key:
+            raise RuntimeError("LLM_PROVIDER=gemini requires GEMINI_API_KEY in .env or the environment.")
+        return key
+    # Local Ollama ignores the key, but the SDK needs a non-empty placeholder.
     return os.getenv("LLM_API_KEY") or DEFAULT_API_KEY
 
 
@@ -107,6 +122,8 @@ def make_chat_model(temperature: float = 0.4, max_tokens: int | None = None,
 
     callbacks = kwargs.pop("callbacks", None) or []
     streaming = False
+    if get_provider() == "gemini":
+        stream_activity = False
     if stream_activity:
         callbacks = [*callbacks, _make_activity_callback()]
         streaming = True

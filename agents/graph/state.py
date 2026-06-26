@@ -33,4 +33,5 @@ class TenderState(TypedDict, total=False):
 
     # ── assembled result ───────────────────────────────────────────────────────
     draft: TenderDraft
+    tender_intelligence: dict[str, Any]
     artifact: dict[str, Any]
