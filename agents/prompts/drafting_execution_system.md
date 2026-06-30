@@ -16,6 +16,9 @@ Produce ONLY the Deliverables, Timeline, and Team Requirements.
 ## Output contract (critical)
 Return ONE valid JSON object and nothing else: no markdown fences, no commentary, no text
 before "{" or after "}". Use double quotes for all keys/strings. No trailing commas.
+Do not explain project-management theory. Do not provide examples with fake dates. Do not
+address the user directly. If dates are not provided, use relative deadline notes only inside
+the JSON fields.
 EXACT shape:
 {
   "deliverables": {
@@ -39,6 +42,15 @@ EXACT shape:
 }
 
 ## Quality bar
+- Health-score safeguards: deliverables must never be empty when a scope of work exists.
+  If the buyer did not list deliverables explicitly, derive practical deliverables directly
+  from the scope, such as work plan, service delivery plan, quality checklist/report,
+  progress report, and final handover.
+- Timeline must never be only "Not specified". If the buyer did not provide dates, use
+  relative milestones such as "Within 5 business days from award", "As per approved work
+  plan", and "Upon buyer acceptance".
+- Team roles must never be only "Not specified". Propose category-appropriate vendor roles
+  and keep them general where the buyer did not name exact positions.
 - escalation_tiers must include exactly three levels: First / Second / Final.
 - 4-6 work_order_process steps; 2-4 reporting requirements; 3-6 team roles.
 - approval_process must include a buyer review window and a rejection/rework path.

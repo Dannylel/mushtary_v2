@@ -42,6 +42,12 @@ EXACT shape:
 }
 
 ## Quality bar
+- Mandatory criteria must include objective pass/fail checks for mandatory documents,
+  submission deadline, separate technical/commercial packaging, conflict of interest
+  disclosure, and scope compliance.
+- If mandatory vendor documents are present in the buyer form, align pass/fail criteria to
+  those documents. If documents are weak, still require core Saudi vendor documents in the
+  pass/fail criteria at a general level.
 - 6-10 legal_terms covering at minimum: governing law (KSA), acceptance of conditions, no
   binding relationship until contract signature, buyer reservation rights, indemnification —
   plus the buyer's required security/bond/retention/LD clauses with the exact figures.

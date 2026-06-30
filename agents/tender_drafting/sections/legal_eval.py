@@ -91,6 +91,15 @@ def _as_str_list(value: Any) -> list[str]:
     return [str(value).strip()]
 
 
+def _as_dict(value: Any) -> dict:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, list):
+        first = next((item for item in value if isinstance(item, dict)), None)
+        return first or {}
+    return {}
+
+
 _CORE_TECHNICAL_PARAMS = [
     "Completeness of the technical proposal, including all required sections and supporting documents.",
     "Clarity, readability, organization, and internal consistency of the technical proposal.",
@@ -192,7 +201,7 @@ class LegalEvalSectionAgent(BaseSectionAgent):
         if not data:
             return fb
 
-        gt = data.get("general_terms") or {}
+        gt = _as_dict(data.get("general_terms"))
         general_terms = GeneralTerms(
             legal_terms=_as_str_list(gt.get("legal_terms")) or fb.general_terms.legal_terms,
             compliance_requirements=_as_str_list(gt.get("compliance_requirements")) or fb.general_terms.compliance_requirements,
@@ -200,7 +209,7 @@ class LegalEvalSectionAgent(BaseSectionAgent):
             equipment_and_logistics=_as_str(gt.get("equipment_and_logistics"), fb.general_terms.equipment_and_logistics),
         )
 
-        ev = data.get("evaluation") or {}
+        ev = _as_dict(data.get("evaluation"))
         mandatory = [MandatoryCriterion(criterion=c) for c in _as_str_list(ev.get("mandatory_criteria"))]
         evaluation_criteria = EvaluationSection(
             # Weighting + minimum score are FACTS — never taken from the model.
@@ -215,7 +224,7 @@ class LegalEvalSectionAgent(BaseSectionAgent):
             award_basis=_as_str(ev.get("award_basis"), fb.evaluation_criteria.award_basis),
         )
 
-        pt = data.get("payment_terms") or {}
+        pt = _as_dict(data.get("payment_terms"))
         payment_terms = PaymentTerms(
             payment_basis=_as_str(pt.get("payment_basis"), fb.payment_terms.payment_basis),
             invoice_requirements=_as_str_list(pt.get("invoice_requirements")) or fb.payment_terms.invoice_requirements,

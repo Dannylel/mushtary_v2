@@ -84,6 +84,15 @@ def _as_str_list(value: Any) -> list[str]:
     return [str(value).strip()]
 
 
+def _as_dict(value: Any) -> dict:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, list):
+        first = next((item for item in value if isinstance(item, dict)), None)
+        return first or {}
+    return {}
+
+
 def _buyer_deliverables(form: TenderBuyerForm, deadlines: dict | None = None) -> list[TenderDeliverable]:
     deadlines = deadlines or {}
     out: list[TenderDeliverable] = []
@@ -172,7 +181,7 @@ class ExecutionSectionAgent(BaseSectionAgent):
 
         fb = _execution_fallback(form)
 
-        dl = data.get("deliverables") or {}
+        dl = _as_dict(data.get("deliverables"))
         deadlines = dl.get("deliverable_deadlines") if isinstance(dl.get("deliverable_deadlines"), dict) else {}
 
         escalation = []
@@ -195,7 +204,7 @@ class ExecutionSectionAgent(BaseSectionAgent):
             escalation_tiers=escalation or fb.deliverables.escalation_tiers,
         )
 
-        tl = data.get("timeline") or {}
+        tl = _as_dict(data.get("timeline"))
         ai_milestones = []
         for m in (tl.get("milestones") or []):
             if isinstance(m, dict):
@@ -214,7 +223,7 @@ class ExecutionSectionAgent(BaseSectionAgent):
             milestones=milestones,
         )
 
-        tr = data.get("team_requirements") or {}
+        tr = _as_dict(data.get("team_requirements"))
         roles = []
         for r in (tr.get("roles") or []):
             if isinstance(r, dict):

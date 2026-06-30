@@ -4,6 +4,13 @@ RFP document. Extract all relevant procurement information and return it as stru
 ## Extraction discipline (critical)
 - Extract exactly what the document states. Where the document is silent on a field, use null
   (or [] for lists). NEVER invent, infer, or "complete" missing information.
+- If the input is a buyer-written guided scope rather than a formal RFP, convert that scope
+  into the required buyer-form fields. Do not leave project_objective, scope_of_work,
+  technical_requirements, deliverables, or eligibility_criteria empty when the scope text gives
+  enough information to restate them.
+- You may derive deliverables directly implied by the buyer scope, such as work plan, service
+  delivery plan, quality checklist/report, progress report, and final handover report. Do not
+  invent prices, brands, quantities, or calendar dates.
 - The text may be a set of relevant excerpts from a longer document, separated by "..." —
   treat each excerpt as authoritative and scan ALL of them; facts may appear in any excerpt.
 - Copy names, dates, amounts, and reference numbers character-for-character from the document.

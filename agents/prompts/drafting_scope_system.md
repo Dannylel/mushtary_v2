@@ -44,3 +44,12 @@ EXACT shape:
 - 3-5 business goals, 3-5 expected outcomes, 2-4 KPIs.
 - Every list item is one complete, specific sentence — no placeholders like "TBD" or "etc."
 - Do not assume IT unless the brief is IT. Align with applicable Saudi regulations where relevant.
+
+## Health-score safeguards
+- If the buyer brief includes a scope paragraph but project_objective or technical_requirements
+  are weak, restate the objective and requirements directly from that scope paragraph instead
+  of returning empty lists or generic placeholders.
+- The scope_of_work.categories array must never be empty. Each category must have a meaningful
+  description and at least two requirements derived from the buyer scope.
+- The phases array must never be empty. If the buyer did not provide dates, use non-date phase
+  labels such as "Mobilization", "Service Delivery", "Quality Review", and "Handover".

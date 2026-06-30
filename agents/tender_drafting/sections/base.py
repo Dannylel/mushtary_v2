@@ -5,6 +5,7 @@ calls the LLM once, and returns validated Pydantic models.
 """
 import json
 import logging
+import re
 
 from agents.llm_config import chat_text
 
@@ -66,11 +67,14 @@ class BaseSectionAgent:
     def _parse_json(self, raw: str | None) -> dict:
         if not raw:
             return {}
-        text = raw.strip()
+        text = re.sub(r"<think>.*?</think>", "", raw, flags=re.S).strip()
         if text.startswith("```"):
             text = text.split("```")[1]
             if text.startswith("json"):
                 text = text[4:]
+        start, end = text.find("{"), text.rfind("}")
+        if start >= 0 and end > start:
+            text = text[start:end + 1]
         try:
             parsed = json.loads(text.strip())
         except json.JSONDecodeError as e:

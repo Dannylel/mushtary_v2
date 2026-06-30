@@ -29,10 +29,18 @@ The AI never publishes, activates, or awards anything. Every generated tender is
     criteria, timeline, and mandatory documents.
 - Formal tender PDF design:
   - Cover page
+  - Buyer logo / buyer entity area
   - Tender Data Sheet
   - Draft / Pending Buyer Approval status
-  - Headers, footers, page numbers, watermark
+  - Modern black-and-white document styling
+  - Calibri document font with Helvetica fallback
+  - Formal headers, footers, page numbers
+  - Light professional tables and process figures
   - Approval block, signature/stamp section, trace ID, version/status controls
+- Health review stays on the website only; it is not included inside the issued tender PDF.
+- Temporary buyer logo support:
+  - Put a logo image at `assets/buyer_logo.png`, or
+  - pass `buyer_logo_path` in tender metadata / tender data sheet.
 - More resilient JSON parsing for local model responses, including accidental JSON lists.
 
 ## Agents
@@ -129,6 +137,54 @@ The health committee reviews the generated tender after assembly.
 
 The frontend shows the health score, agent summaries, reasoning summaries, findings,
 evidence, recommendations, and missing/weak requirements.
+
+## Why agents output JSON instead of Markdown
+
+The drafting agents return structured JSON because the tender is assembled, validated,
+scored, and rendered section by section.
+
+JSON lets the app reliably read fields such as:
+
+- `scope_of_work.categories`
+- `deliverables.deliverables`
+- `timeline.milestones`
+- `evaluation_criteria.mandatory_criteria`
+- `payment_terms`
+- `tender_intelligence`
+
+Markdown is better as a final presentation format, but it is fragile as an internal
+agent contract: headings can change, tables can break, and required sections are harder
+to validate. Mushtarry therefore uses JSON for agent outputs, then renders that JSON
+into a professional PDF and frontend preview.
+
+## Tender PDF output
+
+The generated PDF is designed to feel like a formal tender package that a buyer can
+review before issuing to vendors.
+
+It includes:
+
+- Cover page with buyer logo/entity, tender title, reference, issue date, deadline,
+  confidentiality notice, and draft status.
+- Document control page with version, generated date, trace ID, status, and publication
+  controls.
+- Tender Data Sheet as a formal table.
+- Instructions to Bidders, Eligibility Requirements, Submission Requirements,
+  Evaluation Methodology, Terms and Conditions, Annexures, and Buyer Approval.
+- Monochrome/grayscale styling only: no colored tables, no colored banners.
+- Modern Calibri typography when available on Windows.
+- Light horizontal-rule tables instead of heavy grid boxes.
+- Process figures for lifecycle, submission, and evaluation flows.
+- Buyer-Admin approval block with signature and official stamp area.
+
+Logo behavior:
+
+```text
+assets/buyer_logo.png
+```
+
+If this file exists, it is used on the cover page. If no logo is found, the renderer
+falls back to a simple initials box based on the buyer entity name.
 
 ## Setup
 
@@ -284,6 +340,7 @@ Only index human-approved material. Do not index unapproved AI drafts.
 | `agents/tender_intelligence/` | Tender Health Committee. |
 | `agents/sow_review/` | Guided SoW review/rewrite agent. |
 | `pdf_renderer.py` | Formal tender PDF renderer. |
+| `assets/buyer_logo.png` | Optional temporary buyer logo used on the tender PDF cover. |
 | `agents/prompts/` | System prompts for drafting and health agents. |
 | `agents/prompt_registry.py` | Prompt registry and versions. |
 

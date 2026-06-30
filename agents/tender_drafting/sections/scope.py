@@ -77,6 +77,15 @@ def _as_str_list(value: Any) -> list[str]:
     return [str(value).strip()]
 
 
+def _as_dict(value: Any) -> dict:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, list):
+        first = next((item for item in value if isinstance(item, dict)), None)
+        return first or {}
+    return {}
+
+
 def _scope_fallback(form: TenderBuyerForm) -> ScopeSections:
     """Minimal draft built ONLY from buyer inputs — used if the LLM output is unusable."""
     return ScopeSections(
@@ -123,21 +132,21 @@ class ScopeSectionAgent(BaseSectionAgent):
 
         fb = _scope_fallback(form)
 
-        po = data.get("project_overview") or {}
+        po = _as_dict(data.get("project_overview"))
         project_overview = ProjectOverview(
             project_introduction=_as_str(po.get("project_introduction"), fb.project_overview.project_introduction),
             background=_as_str(po.get("background"), fb.project_overview.background),
             context=_as_str(po.get("context"), fb.project_overview.context),
         )
 
-        ob = data.get("objectives") or {}
+        ob = _as_dict(data.get("objectives"))
         objectives = Objectives(
             business_goals=_as_str_list(ob.get("business_goals")) or fb.objectives.business_goals,
             expected_outcomes=_as_str_list(ob.get("expected_outcomes")) or fb.objectives.expected_outcomes,
             kpis=_as_str_list(ob.get("kpis")),
         )
 
-        sow = data.get("scope_of_work") or {}
+        sow = _as_dict(data.get("scope_of_work"))
         categories = []
         for c in (sow.get("categories") or []):
             if not isinstance(c, dict):
