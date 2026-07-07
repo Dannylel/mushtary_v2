@@ -312,22 +312,113 @@ function buildAITenderCommittee(ti) {
 }
 
 function renderAITenderCommittee(committee) {
-  const rowHtml = committee.rows.map(r => `
-    <tr>
-      <td><b>${esc(r.agent)}</b><span>${esc(r.focus)}</span></td>
-      <td><span class="committee-score">${esc(r.score ?? "—")}</span></td>
-    </tr>`).join("");
-  return `<div class="committee-box">
-    <table class="committee-table">
-      <thead><tr><th>AI Agent</th><th>Score</th></tr></thead>
-      <tbody>
-        ${rowHtml}
-        <tr class="committee-final"><td>Final AI Recommendation</td><td><span class="committee-score">${esc(committee.finalScore ?? "—")}</span></td></tr>
-      </tbody>
-    </table>
-    ${committee.priorities && committee.priorities.length ? sub("Improvement Priorities", ul(committee.priorities)) : ""}
-    ${committee.reasoning && committee.reasoning.length ? sub("Committee Reasoning", ul(committee.reasoning)) : ""}
-    <div class="hint">${esc(committee.recommendation)}</div>
+  const cards = committee.rows.map(r => `
+    <div class="committee-card">
+      <div class="committee-card-head">
+        <b>${esc(r.agent)}</b>
+        <span class="score-pill">${esc(r.score ?? "—")}</span>
+      </div>
+      <div class="committee-focus">${esc(r.focus)}</div>
+      ${r.recommendation ? `<p>${esc(r.recommendation)}</p>` : ""}
+    </div>`).join("");
+  return `<div class="committee-board">
+    ${cards}
+    <div class="committee-card final">
+      <div class="committee-card-head">
+        <b>Final AI Recommendation</b>
+        <span class="score-pill">${esc(committee.finalScore ?? "—")}</span>
+      </div>
+      <div class="committee-focus">${esc(committee.recommendation)}</div>
+    </div>
+  </div>
+  ${committee.priorities && committee.priorities.length ? sub("Improvement Priorities", ul(committee.priorities)) : ""}
+  ${committee.reasoning && committee.reasoning.length ? sub("Committee Reasoning", ul(committee.reasoning)) : ""}`;
+}
+
+function scoreLabel(score) {
+  const n = scoreNum(score);
+  if (n === null) return "Pending";
+  if (n >= 85) return "Strong";
+  if (n >= 70) return "Review";
+  return "At Risk";
+}
+
+function complianceStatus(ti, committee) {
+  const compliance = scoreNum(ti.compliance_readiness);
+  const lowCommittee = (committee.rows || []).some(r => scoreNum(r.score) !== null && scoreNum(r.score) < 70);
+  if (compliance === null) return "Pending Review";
+  if (compliance >= 85 && !lowCommittee) return "Likely Compliant";
+  if (compliance >= 70) return "Buyer Review Required";
+  return "Compliance Risk";
+}
+
+function probabilityOfSuccess(ti, committee) {
+  const finalScore = scoreNum(committee.finalScore ?? ti.tender_quality_score);
+  const participation = scoreNum(ti.vendor_participation_score);
+  const base = finalScore ?? scoreNum(ti.tender_quality_score) ?? 75;
+  const adjusted = Math.round((base * 0.7) + ((participation ?? base) * 0.3));
+  return Math.max(0, Math.min(100, adjusted));
+}
+
+function metricCard(label, value, subtext = "") {
+  return `<div class="intel-metric">
+    <span>${esc(label)}</span>
+    <b>${esc(value ?? "—")}</b>
+    ${subtext ? `<small>${esc(subtext)}</small>` : ""}
+  </div>`;
+}
+
+function renderAIRecommendationLayer(ti, committee) {
+  const finalScore = scoreNum(committee.finalScore ?? ti.tender_quality_score);
+  const success = probabilityOfSuccess(ti, committee);
+  return `<div class="ai-reco-layer">
+    <div class="ai-reco-head">
+      <div>
+        <h4>AI Recommendation Layer</h4>
+        <p>Optional decision support. Advisory only; buyer controls final evaluation, award, and publication.</p>
+      </div>
+      <span class="badge ok dot">Enabled</span>
+    </div>
+    <div class="reco-grid">
+      ${metricCard("Technical Evaluation", "50%", "Quality, fit, methodology")}
+      ${metricCard("Financial Evaluation", "20%", "Commercial competitiveness")}
+      ${metricCard("VRI Weight", "20%", "Vendor reputation signal")}
+      ${metricCard("Risk Assessment", "10%", "Delivery and compliance risk")}
+      ${metricCard("Compliance Status", complianceStatus(ti, committee))}
+      ${metricCard("Probability of Success", `${success}%`, scoreLabel(success))}
+      ${metricCard("Final AI Recommendation", finalScore !== null ? `${finalScore}/100` : "Pending", scoreLabel(finalScore))}
+    </div>
+  </div>`;
+}
+
+function renderTenderIntelligencePanel(ti) {
+  const committee = buildAITenderCommittee(ti);
+  const finalScore = scoreNum(committee.finalScore ?? ti.tender_quality_score);
+  return `<div class="intel-panel">
+    <div class="intel-hero">
+      <div>
+        <div class="intel-eyebrow">Mushtarry Tender Intelligence</div>
+        <h2>${esc(finalScore !== null ? `${finalScore}/100` : "Pending")}</h2>
+        <p>${esc(committee.recommendation || ti.publish_readiness || "Buyer review required before publication.")}</p>
+      </div>
+      <span class="badge draft dot">Advisory · Buyer decides</span>
+    </div>
+    <div class="intel-grid">
+      ${metricCard("Tender Quality Score", `${ti.tender_quality_score ?? "—"}/100`, ti.publish_readiness || "")}
+      ${metricCard("Scope Clarity", `${ti.scope_clarity ?? "—"}%`)}
+      ${metricCard("Commercial Clarity", `${ti.commercial_clarity ?? "—"}%`)}
+      ${metricCard("Compliance Readiness", `${ti.compliance_readiness ?? "—"}%`)}
+      ${metricCard("Risk of Vendor Questions", ti.risk_of_vendor_questions || "—")}
+      ${metricCard("Estimated Vendor Participation", ti.estimated_vendor_participation || "—")}
+    </div>
+    ${renderAIRecommendationLayer(ti, committee)}
+    <div class="intel-section">
+      <div class="intel-section-head">
+        <h4>AI Tender Committee</h4>
+        <span>Premium decision-support preview</span>
+      </div>
+      ${renderAITenderCommittee(committee)}
+    </div>
   </div>`;
 }
 
@@ -428,20 +519,8 @@ function renderDraft(result) {
       sub("Reasoning", ul(a.reasoning_summary || [])) +
       ul(a.signals || [])
     );
-    const committee = buildAITenderCommittee(ti);
-    sections.push(block("AI", "AI Tender Committee",
-      kv([
-        ["Tender Quality Score", `${ti.tender_quality_score}/100`],
-        ["Scope Clarity", `${ti.scope_clarity}%`],
-        ["Commercial Clarity", `${ti.commercial_clarity}%`],
-        ["Compliance Readiness", `${ti.compliance_readiness}%`],
-        ["Vendor Participation Score", `${ti.vendor_participation_score ?? "—"}%`],
-        ["Risk of Vendor Questions", ti.risk_of_vendor_questions],
-        ["Estimated Vendor Participation", ti.estimated_vendor_participation],
-        ["Publish Readiness", ti.publish_readiness],
-        ["Document Status", ti.document_status],
-      ]) +
-      sub("AI Tender Committee", renderAITenderCommittee(committee)) +
+    sections.push(renderTenderIntelligencePanel(ti));
+    sections.push(block("AI", "AI Review Detail",
       sub("AI Review Summary", para(ti.improvement_summary)) +
       sub("Committee Reasoning", ul(ti.committee_reasoning)) +
       sub("Strengths", ul(ti.strengths)) +
