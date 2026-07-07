@@ -62,6 +62,7 @@ function collectDraftOverrides() {
     submission_deadline: value("#draftSubmissionDate") || undefined,
     submission_time: value("#draftSubmissionTime") || undefined,
     opening_date: value("#draftOpeningDate") || undefined,
+    proposal_validity_days: numberOrNull("#draftProposalValidityDays"),
     site_visit_required: checked("#draftSiteVisitRequired"),
     site_visit_date: value("#draftSiteVisitDate") || undefined,
     bid_security_required: checked("#draftBidSecurityRequired"),
@@ -75,10 +76,14 @@ function collectDraftOverrides() {
     technical_weight,
     financial_weight,
     minimum_score: numberOrNull("#draftMinimumScore"),
+    proposal_format: value("#draftProposalFormat") || undefined,
     contract_duration: value("#draftContractDuration") || undefined,
+    language_requirements: value("#draftLanguageRequirements") || undefined,
     submission_controls: {
       separate_technical_commercial: checked("#draftSeparateTechCommercial"),
       late_submission_allowed: checked("#draftLateSubmissionAllowed"),
+      technical_file_format: value("#draftTechnicalFileFormat") || undefined,
+      commercial_file_format: value("#draftCommercialFileFormat") || undefined,
     },
   };
 }
@@ -617,23 +622,6 @@ function renderDraft(result) {
     ${sections.join("")}
   </div>`;
 }
-
-// ── DRAFT (seed) ───────────────────────────────────────────────────────────────
-$("#draftBtn").addEventListener("click", () => {
-  const seed = $("#draftSeed").value.trim();
-  const template = selectedPdfTemplate();
-  const form_overrides = collectDraftOverrides();
-  runJob({
-    target: "#draftResult",
-    loadMain: "Drafting your tender…",
-    loadSub: "Inventing the buyer brief, then drafting 4 sections in parallel — watch the console below",
-    start: () => fetch("/api/jobs/draft", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ seed, template, form_overrides }),
-    }).then(r => r.json()),
-    render: renderDraft,
-  });
-});
 
 // ── EXTRACT (and full pipeline from SOW) ─────────────────────────────────────────
 function renderSowReview(result) {

@@ -134,7 +134,7 @@ def _apply_form_overrides(form, overrides: dict | None):
         "saudization_required", "confidentiality_required", "onsite_required",
         "evaluation_model", "technical_weight", "financial_weight",
         "minimum_score", "submission_method", "proposal_format",
-        "contract_duration", "warranty_duration",
+        "contract_duration", "warranty_duration", "language_requirements",
     ]
     for field in simple_fields:
         if field in overrides and overrides[field] not in (None, ""):

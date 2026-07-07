@@ -55,7 +55,7 @@
           <div class="card feature" data-go="draft">
             <div class="feat-ico">✎</div>
             <h3>Draft Tender</h3>
-            <p>Turn a one-line idea into a full RFP — four AI sections drafted in parallel and grounded on a clause library + Saudi procurement law.</p>
+            <p>Turn a project Scope of Work plus fixed tender facts into a full RFP — four AI sections drafted in parallel and grounded on a clause library + Saudi procurement law.</p>
             <span class="link">Open →</span>
           </div>
           <div class="card feature" data-go="extract">
@@ -94,7 +94,7 @@
       <section class="view" id="view-draft">
         <header class="page-head">
           <h1>Draft a Tender <span class="badge ok" style="vertical-align:middle">full pipeline</span></h1>
-          <p>Runs the complete pipeline: AI invents the buyer brief from your topic, four section agents draft in parallel (grounded on the knowledge base), then everything is assembled into the 18-section RFP.</p>
+          <p>Write or paste the Scope of Work, add the fixed tender facts Qwen should not guess, then generate the full 18-section RFP.</p>
         </header>
         <div class="panel">
           <label class="field-label">PDF template design</label>
@@ -110,7 +110,7 @@
           </div>
           <div class="hint" style="margin-bottom:16px">Choose the tender PDF design before generating, or switch it later from the download toolbar.</div>
           <details class="control-details" open>
-            <summary>Tender controls</summary>
+            <summary>Dates and tender facts</summary>
             <div class="grid two" style="margin-top:14px">
               <div>
                 <label class="field-label">Category</label>
@@ -159,6 +159,10 @@
                 <input id="draftOpeningDate" class="input" type="date" />
               </div>
               <div>
+                <label class="field-label">Proposal validity days</label>
+                <input id="draftProposalValidityDays" class="input" type="number" min="1" value="90" />
+              </div>
+              <div>
                 <label class="field-label">Evaluation split</label>
                 <select id="draftEvaluationModel" class="input">
                   <option value="70/30">70% Technical / 30% Financial</option>
@@ -198,14 +202,42 @@
                 <label class="field-label">Contract duration</label>
                 <input id="draftContractDuration" class="input" placeholder="e.g. 12 months" />
               </div>
+              <div>
+                <label class="field-label">Proposal format</label>
+                <select id="draftProposalFormat" class="input">
+                  <option>Separate Technical Proposal and Commercial Proposal</option>
+                  <option>Combined Technical and Commercial Proposal</option>
+                  <option>Technical Proposal only</option>
+                  <option>Commercial Proposal only</option>
+                </select>
+              </div>
+              <div>
+                <label class="field-label">Technical file format</label>
+                <select id="draftTechnicalFileFormat" class="input">
+                  <option>PDF</option>
+                  <option>PDF/DOCX</option>
+                  <option>PDF/PPTX</option>
+                </select>
+              </div>
+              <div>
+                <label class="field-label">Commercial file format</label>
+                <select id="draftCommercialFileFormat" class="input">
+                  <option>PDF/Excel</option>
+                  <option>Excel</option>
+                  <option>PDF</option>
+                </select>
+              </div>
+              <div>
+                <label class="field-label">Language requirements</label>
+                <select id="draftLanguageRequirements" class="input">
+                  <option>Arabic and English; Arabic takes precedence in case of conflict.</option>
+                  <option>Arabic only</option>
+                  <option>English only</option>
+                  <option>Arabic and English; English takes precedence in case of conflict.</option>
+                </select>
+              </div>
             </div>
           </details>
-          <label class="field-label">Tender topic / seed <span class="muted">(optional — leave blank for a random realistic tender)</span></label>
-          <div class="row">
-            <input id="draftSeed" class="input" placeholder="e.g. hospital MRI machine supply and installation" />
-            <button id="draftBtn" class="btn primary">Run Full Pipeline</button>
-          </div>
-          <div class="hint">⏱ Runs locally on a 7B model — a full tender takes a few minutes. Watch the model write live in the activity console below.</div>
         </div>
         <div class="panel">
           <div class="result-head">
@@ -213,7 +245,7 @@
               <div class="result-title">Project + SoW Guided Mode</div>
               <div class="hint">Write the project name and scope, ask Qwen to evaluate/rewrite the scope, then generate the tender from the approved scope.</div>
             </div>
-            <span class="badge ok">new mode</span>
+            <span class="badge ok">only mode</span>
           </div>
           <div class="grid two">
             <div>
@@ -226,7 +258,7 @@
             </div>
           </div>
           <label class="field-label" style="margin-top:16px">Scope of work</label>
-          <textarea id="guidedScope" class="input textarea" placeholder="Paste or write the buyer's scope of work here..."></textarea>
+          <textarea id="guidedScope" class="input textarea hero-textarea" placeholder="Paste or write the buyer's scope of work here..."></textarea>
           <div class="toolbar" style="margin-top:14px">
             <button id="reviewSowBtn" class="btn ghost">Evaluate / Rewrite SoW</button>
             <button id="guidedDraftBtn" class="btn primary">Generate Tender From Approved SoW</button>
