@@ -18,6 +18,7 @@ legally material clauses still appear if the LLM output is unusable.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from agents.buyer_form import TenderBuyerForm
@@ -27,6 +28,7 @@ from agents.tender_drafting.schemas import (
     GeneralTerms,
     LegalEvalSections,
     MandatoryCriterion,
+    PaymentScheduleItem,
     PaymentTerms,
 )
 
@@ -66,6 +68,9 @@ COMMERCIAL PROTECTIONS (use exact values; include only if required):
 
 BUYER PAYMENT PREFERENCE:
 {form.payment_terms}
+
+MANDATORY / CONDITIONAL VENDOR DOCUMENTS:
+{chr(10).join(f"  - {d.name} ({d.requirement_level}; {d.category}; {d.applicability})" for d in (form.mandatory_documents + form.conditional_documents + form.sector_specific_documents)) or "  Not specified"}
 
 SAUDIZATION REQUIRED: {form.saudization_required}
 REQUIRED CERTIFICATIONS: {", ".join(form.required_certifications) or "None stated"}
@@ -164,11 +169,34 @@ def _legal_fallback(form: TenderBuyerForm) -> LegalEvalSections:
         ),
         payment_terms=PaymentTerms(
             payment_basis=form.payment_terms or "Milestone-based payment subject to the buyer's written acceptance of each milestone.",
+            payment_schedule=[
+                PaymentScheduleItem(
+                    milestone="Work Order / milestone completion",
+                    payment_trigger="Buyer accepts the completed deliverable or milestone through the Mushtarry platform.",
+                    supporting_evidence="Approved deliverable, completion certificate or acceptance record, and valid tax invoice.",
+                    invoice_timing="Invoice may be submitted after buyer acceptance is recorded.",
+                    payment_percentage_or_amount="As stated in the approved contract or Work Order.",
+                ),
+                PaymentScheduleItem(
+                    milestone="Final handover and closure",
+                    payment_trigger="Buyer confirms final acceptance and closure of all outstanding obligations.",
+                    supporting_evidence="Final acceptance record, final report where applicable, and complete invoice support.",
+                    invoice_timing="Final invoice may be submitted after final acceptance.",
+                    payment_percentage_or_amount="Remaining approved balance subject to any retention or set-off rights.",
+                ),
+            ],
             invoice_requirements=[
                 "Valid tax invoice issued by the vendor.",
                 "Signed milestone acceptance or completion certificate.",
                 "Vendor banking details matching the approved IBAN certificate.",
             ],
+            payment_controls=[
+                "No invoice shall be payable until the relevant deliverable or milestone is accepted by the buyer.",
+                "The buyer may reject or return incomplete invoices, unsupported claims, or invoices submitted outside the Mushtarry platform.",
+                "Payment does not waive the buyer's rights regarding defects, warranty obligations, audit findings, or contractual remedies.",
+            ],
+            tax_and_currency="All prices and invoices shall be in Saudi Riyals unless expressly approved otherwise by the buyer. VAT shall be shown separately where applicable and must comply with ZATCA requirements.",
+            withholding_retention="Any retention, withholding, set-off, or deduction shall apply only as stated in the tender data sheet, Work Order, final contract, or applicable law.",
             payment_timeline="Approved invoices shall be processed within thirty (30) calendar days of a valid, complete, buyer-approved invoice.",
         ),
         # The assembled draft always uses the platform-standard annexure set; this
@@ -186,17 +214,73 @@ def _merge_technical_params(ai_params: list[str], form: TenderBuyerForm) -> list
     return merged
 
 
+_LEGAL_RAG_QUERIES = [
+    "governing law general terms buyer reservations conflict of interest indemnification Saudi tender",
+    "confidentiality non disclosure return destruction confidential information Saudi procurement",
+    "evaluation methodology mandatory pass fail technical financial award basis two envelope",
+    "payment terms milestone invoice tax invoice payment timeline retention Saudi Riyals",
+    "bid security performance bond guarantee forfeiture validity renewal",
+    "liquidated damages penalties delay cap termination",
+    "eligibility qualifications commercial registration tax GOSI Saudization licenses documents",
+    "submission award deadline late submission clarifications addenda notification standstill",
+    "warranty delivery acceptance defect remedy intellectual property handover audit",
+    "compliance localization anti corruption HSE insurance sanctions export control Saudi",
+]
+
+
+def _local_clause_context() -> str:
+    """Fallback to source clause files when vector retrieval is unavailable."""
+    clauses_dir = Path(__file__).parents[2] / "rag" / "sources" / "clauses"
+    if not clauses_dir.exists():
+        return ""
+    parts = []
+    for path in sorted(clauses_dir.glob("*.md")):
+        text = path.read_text(encoding="utf-8", errors="ignore").strip()
+        if text:
+            parts.append(f"(source: {path.name})\n{text[:2200]}")
+    if not parts:
+        return ""
+    return (
+        "REFERENCE EXCERPTS (local standard clause library - use for legal structure "
+        "and vetted clause wording; do NOT copy facts, names, numbers, or dates):\n\n"
+        + "\n\n---\n\n".join(parts)
+        + "\n"
+    )
+
+
+def _legal_reference_context(form: TenderBuyerForm) -> str:
+    try:
+        from agents.rag import get_tender_kb
+        from agents.rag.knowledge_base import TenderKnowledgeBase
+
+        kb = get_tender_kb()
+        hits = []
+        seen: set[tuple[str, str]] = set()
+        for query in _LEGAL_RAG_QUERIES:
+            full_query = f"{query} {form.category} {form.subcategory}"
+            for hit in kb.retrieve(full_query, k=3, min_score=0.0):
+                key = (hit.metadata.get("source", ""), hit.text[:90])
+                if key not in seen:
+                    seen.add(key)
+                    hits.append(hit)
+                if len(hits) >= 12:
+                    break
+            if len(hits) >= 12:
+                break
+        context = TenderKnowledgeBase.format_context(hits)
+        return context or _local_clause_context()
+    except Exception:
+        return _local_clause_context()
+
+
 class LegalEvalSectionAgent(BaseSectionAgent):
     def run(self, form: TenderBuyerForm) -> LegalEvalSections:
-        # Pull standard legal/evaluation clause wording for this category (empty string if
-        # the knowledge base is unpopulated — drafting then proceeds exactly as before).
-        ref = self._reference_context(
-            f"legal terms, confidentiality, evaluation criteria and payment terms for "
-            f"{form.category} / {form.subcategory} procurement"
-        )
+        # Pull targeted legal/evaluation clause wording from the RAG corpus, with a
+        # local clause-file fallback if vector retrieval is unavailable.
+        ref = _legal_reference_context(form)
         user = f"{ref}\n{_build_user_message(form)}" if ref else _build_user_message(form)
 
-        data = self._generate(SYSTEM_PROMPT, user, max_tokens=2800)
+        data = self._generate(SYSTEM_PROMPT, user, max_tokens=4600)
         fb = _legal_fallback(form)
         if not data:
             return fb
@@ -225,9 +309,27 @@ class LegalEvalSectionAgent(BaseSectionAgent):
         )
 
         pt = _as_dict(data.get("payment_terms"))
+        schedule = []
+        for item in pt.get("payment_schedule") or []:
+            item_dict = _as_dict(item)
+            if not item_dict:
+                continue
+            schedule.append(
+                PaymentScheduleItem(
+                    milestone=_as_str(item_dict.get("milestone"), "Accepted milestone"),
+                    payment_trigger=_as_str(item_dict.get("payment_trigger"), "Buyer acceptance recorded on the Mushtarry platform."),
+                    supporting_evidence=_as_str(item_dict.get("supporting_evidence"), "Accepted deliverable and valid invoice support."),
+                    invoice_timing=_as_str(item_dict.get("invoice_timing"), "After buyer acceptance."),
+                    payment_percentage_or_amount=_as_str(item_dict.get("payment_percentage_or_amount"), "As stated in the approved contract or Work Order."),
+                )
+            )
         payment_terms = PaymentTerms(
             payment_basis=_as_str(pt.get("payment_basis"), fb.payment_terms.payment_basis),
+            payment_schedule=schedule or fb.payment_terms.payment_schedule,
             invoice_requirements=_as_str_list(pt.get("invoice_requirements")) or fb.payment_terms.invoice_requirements,
+            payment_controls=_as_str_list(pt.get("payment_controls")) or fb.payment_terms.payment_controls,
+            tax_and_currency=_as_str(pt.get("tax_and_currency"), fb.payment_terms.tax_and_currency or ""),
+            withholding_retention=_as_str(pt.get("withholding_retention"), fb.payment_terms.withholding_retention or ""),
             payment_timeline=_as_str(pt.get("payment_timeline"), fb.payment_terms.payment_timeline),
         )
 

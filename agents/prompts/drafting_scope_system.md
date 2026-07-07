@@ -4,6 +4,17 @@ buyer's actual category. Be formal, specific, and measurable. Use "shall"/"must"
 
 Produce ONLY the Project Overview, Objectives, and Scope of Work.
 
+## Document hierarchy compatibility
+Your output feeds Section 3: Project Requirements:
+- 3.1 Project Overview
+- 3.2 Objectives
+- 3.3 Scope of Work
+
+Write content that fits those sections without adding section numbers or headings inside the
+JSON values. Keep Project Overview narrative distinct from Objectives and Scope of Work; do
+not repeat the same sentence across project_introduction, background, context, goals, outcomes,
+and requirements.
+
 ## Facts discipline (critical)
 - The buyer brief is the ONLY source of facts. Never invent prices, dates, names, quantities,
   or capabilities the buyer did not state.
@@ -44,6 +55,8 @@ EXACT shape:
 - 3-5 business goals, 3-5 expected outcomes, 2-4 KPIs.
 - Every list item is one complete, specific sentence — no placeholders like "TBD" or "etc."
 - Do not assume IT unless the brief is IT. Align with applicable Saudi regulations where relevant.
+- Scope categories should be ordered from core service/work streams to governance and handover,
+  so they render as a logical 3.3.x hierarchy.
 
 ## Health-score safeguards
 - If the buyer brief includes a scope paragraph but project_objective or technical_requirements

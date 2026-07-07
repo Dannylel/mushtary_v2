@@ -33,6 +33,23 @@ class TenderHealthAggregateOutput(BaseModel):
     committee_reasoning: list[str] = Field(default_factory=list)
 
 
+class AITenderCommitteeAgentResult(BaseModel):
+    agent_name: str
+    score: int = Field(ge=0, le=100)
+    focus: str
+    summary: str
+    recommendation: str
+    findings: list[TenderHealthFinding] = Field(default_factory=list)
+
+
+class AITenderCommitteeOutput(BaseModel):
+    final_score: int = Field(ge=0, le=100)
+    final_recommendation: str
+    agents: list[AITenderCommitteeAgentResult] = Field(default_factory=list)
+    improvement_priorities: list[str] = Field(default_factory=list)
+    committee_reasoning: list[str] = Field(default_factory=list)
+
+
 class TenderHealthScore(BaseModel):
     tender_quality_score: int = Field(ge=0, le=100)
     scope_clarity: int = Field(ge=0, le=100)
@@ -45,6 +62,7 @@ class TenderHealthScore(BaseModel):
     publish_readiness: str
     generated_at: str
     health_agents: list[TenderHealthAgentResult] = Field(default_factory=list)
+    ai_tender_committee: AITenderCommitteeOutput | None = None
     strengths: list[str] = Field(default_factory=list)
     findings: list[TenderHealthFinding] = Field(default_factory=list)
     missing_or_weak_requirements: list[str] = Field(default_factory=list)

@@ -97,6 +97,109 @@
           <p>Runs the complete pipeline: AI invents the buyer brief from your topic, four section agents draft in parallel (grounded on the knowledge base), then everything is assembled into the 18-section RFP.</p>
         </header>
         <div class="panel">
+          <label class="field-label">PDF template design</label>
+          <div class="template-picker" role="group" aria-label="PDF template design">
+            <label class="template-option">
+              <input type="radio" name="pdfTemplate" value="premium_bw" checked />
+              <span>Premium B/W</span>
+            </label>
+            <label class="template-option">
+              <input type="radio" name="pdfTemplate" value="modern_bw" />
+              <span>Modern B/W</span>
+            </label>
+          </div>
+          <div class="hint" style="margin-bottom:16px">Choose the tender PDF design before generating, or switch it later from the download toolbar.</div>
+          <details class="control-details" open>
+            <summary>Tender controls</summary>
+            <div class="grid two" style="margin-top:14px">
+              <div>
+                <label class="field-label">Category</label>
+                <select id="draftCategory" class="input"></select>
+              </div>
+              <div>
+                <label class="field-label">Subcategory</label>
+                <select id="draftSubcategory" class="input"></select>
+              </div>
+              <div>
+                <label class="field-label">Tender type</label>
+                <select id="draftTenderType" class="input">
+                  <option>Request for Proposal (RFP)</option>
+                  <option>Request for Quotation (RFQ)</option>
+                  <option>Request for Information (RFI)</option>
+                  <option>Invitation to Bid (ITB)</option>
+                </select>
+              </div>
+              <div>
+                <label class="field-label">Procurement method</label>
+                <select id="draftProcurementMethod" class="input">
+                  <option>Open / Invited Tender</option>
+                  <option>Open Tender</option>
+                  <option>Invited Tender</option>
+                  <option>Limited Tender</option>
+                  <option>Direct Purchase</option>
+                </select>
+              </div>
+              <div>
+                <label class="field-label">Issue date</label>
+                <input id="draftIssueDate" class="input" type="date" />
+              </div>
+              <div>
+                <label class="field-label">Submission deadline</label>
+                <div class="row compact">
+                  <input id="draftSubmissionDate" class="input" type="date" />
+                  <input id="draftSubmissionTime" class="input" type="time" value="11:00" />
+                </div>
+              </div>
+              <div>
+                <label class="field-label">Clarification deadline</label>
+                <input id="draftClarificationDate" class="input" type="date" />
+              </div>
+              <div>
+                <label class="field-label">Opening date</label>
+                <input id="draftOpeningDate" class="input" type="date" />
+              </div>
+              <div>
+                <label class="field-label">Evaluation split</label>
+                <select id="draftEvaluationModel" class="input">
+                  <option value="70/30">70% Technical / 30% Financial</option>
+                  <option value="60/40">60% Technical / 40% Financial</option>
+                  <option value="50/50">50% Technical / 50% Financial</option>
+                </select>
+              </div>
+              <div>
+                <label class="field-label">Minimum technical score</label>
+                <input id="draftMinimumScore" class="input" type="number" min="0" max="100" value="70" />
+              </div>
+            </div>
+            <div class="toggle-grid" style="margin-top:14px">
+              <label><input id="draftSiteVisitRequired" type="checkbox" /> Site visit required</label>
+              <label><input id="draftBidSecurityRequired" type="checkbox" /> Bid security required</label>
+              <label><input id="draftPerformanceBondRequired" type="checkbox" /> Performance bond required</label>
+              <label><input id="draftLocalPresenceRequired" type="checkbox" /> Local presence required</label>
+              <label><input id="draftSaudizationRequired" type="checkbox" checked /> Saudization required</label>
+              <label><input id="draftSeparateTechCommercial" type="checkbox" checked /> Separate technical / commercial files</label>
+              <label><input id="draftLateSubmissionAllowed" type="checkbox" /> Late submission allowed</label>
+              <label><input id="draftConfidentialityRequired" type="checkbox" checked /> Confidentiality required</label>
+            </div>
+            <div class="grid two" style="margin-top:14px">
+              <div>
+                <label class="field-label">Site visit date</label>
+                <input id="draftSiteVisitDate" class="input" type="date" />
+              </div>
+              <div>
+                <label class="field-label">Bid security amount</label>
+                <input id="draftBidSecurityAmount" class="input" placeholder="e.g. 2% of submitted bid value" />
+              </div>
+              <div>
+                <label class="field-label">Performance bond %</label>
+                <input id="draftPerformanceBondPct" class="input" type="number" min="0" max="100" placeholder="e.g. 10" />
+              </div>
+              <div>
+                <label class="field-label">Contract duration</label>
+                <input id="draftContractDuration" class="input" placeholder="e.g. 12 months" />
+              </div>
+            </div>
+          </details>
           <label class="field-label">Tender topic / seed <span class="muted">(optional — leave blank for a random realistic tender)</span></label>
           <div class="row">
             <input id="draftSeed" class="input" placeholder="e.g. hospital MRI machine supply and installation" />

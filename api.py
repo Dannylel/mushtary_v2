@@ -106,12 +106,77 @@ def _run_async(job: Job, fn, *args, **kwargs) -> None:
 
 # ── Job worker functions (run inside the background thread) ──────────────────────
 
-def _job_full_draft(seed: str | None, sow_path: str | None, sow_text: str | None = None) -> dict:
+def _format_date(value: Any) -> str | None:
+    if not value:
+        return None
+    text = str(value).strip()
+    try:
+        if len(text) == 10 and text[4] == "-" and text[7] == "-":
+            yyyy, mm, dd = text.split("-")
+            return f"{dd}/{mm}/{yyyy}"
+    except Exception:
+        pass
+    return text
+
+
+def _apply_form_overrides(form, overrides: dict | None):
+    if not overrides:
+        return form
+
+    data = form.model_dump(mode="json")
+    simple_fields = [
+        "category", "subcategory", "tender_type", "procurement_method",
+        "proposal_validity_days", "bid_security_required",
+        "bid_security_amount_or_percentage", "performance_bond_required",
+        "performance_bond_percentage", "performance_bond_validity",
+        "liquidated_damages_applicable", "liquidated_damages_rate",
+        "blacklist_declaration_required", "local_presence_required",
+        "saudization_required", "confidentiality_required", "onsite_required",
+        "evaluation_model", "technical_weight", "financial_weight",
+        "minimum_score", "submission_method", "proposal_format",
+        "contract_duration", "warranty_duration",
+    ]
+    for field in simple_fields:
+        if field in overrides and overrides[field] not in (None, ""):
+            data[field] = overrides[field]
+
+    for field in ["issue_date", "clarification_deadline", "submission_deadline", "opening_date", "site_visit_date"]:
+        if field in overrides:
+            formatted = _format_date(overrides.get(field))
+            if formatted:
+                if field == "submission_deadline" and overrides.get("submission_time"):
+                    formatted = f"{formatted} @ {overrides['submission_time']} KSA Time"
+                data[field] = formatted
+
+    if "site_visit_required" in overrides:
+        data["site_visit_required"] = bool(overrides["site_visit_required"])
+        if not data["site_visit_required"]:
+            data["site_visit_date"] = None
+
+    if "submission_controls" in overrides and isinstance(overrides["submission_controls"], dict):
+        controls = dict(data.get("submission_controls") or {})
+        controls.update({k: v for k, v in overrides["submission_controls"].items() if v not in (None, "")})
+        data["submission_controls"] = controls
+
+    from agents.buyer_form import TenderBuyerForm
+    return TenderBuyerForm.model_validate(data)
+
+
+def _job_full_draft(seed: str | None, sow_path: str | None, sow_text: str | None = None, template: str | None = None, form_overrides: dict | None = None) -> dict:
     """Run the full LangGraph pipeline and render the PDF. Returns artifact + file ids."""
     from agents.graph.modes import run_mode
-    from pdf_renderer import build_pdf
+    from pdf_renderer import build_pdf, normalize_template
 
-    if sow_text:
+    if form_overrides:
+        if sow_text:
+            form = run_mode("extract", sow_text=sow_text)
+        elif sow_path:
+            form = run_mode("extract", sow_path=sow_path)
+        else:
+            form = run_mode("form", seed=seed)
+        form = _apply_form_overrides(form, form_overrides)
+        state = run_mode("full", form=form, seed=seed)
+    elif sow_text:
         state = run_mode("full", sow_text=sow_text, seed=seed)
     elif sow_path:
         state = run_mode("full", sow_path=sow_path)
@@ -123,14 +188,17 @@ def _job_full_draft(seed: str | None, sow_path: str | None, sow_text: str | None
         raise RuntimeError("Pipeline returned no artifact")
 
     fid = uuid.uuid4().hex[:12]
-    pdf_path = OUTPUTS / f"tender_{fid}.pdf"
+    template = normalize_template(template)
+    pdf_path = OUTPUTS / f"tender_{fid}_{template}.pdf"
+    default_pdf_path = OUTPUTS / f"tender_{fid}.pdf"
     json_path = OUTPUTS / f"tender_{fid}.json"
     import json as _json
     json_path.write_text(_json.dumps(artifact, indent=2, ensure_ascii=False, default=str),
                          encoding="utf-8")
-    build_pdf(artifact, pdf_path)
+    build_pdf(artifact, pdf_path, template=template)
+    build_pdf(artifact, default_pdf_path, template=template)
 
-    return {"artifact": artifact, "file_id": fid}
+    return {"artifact": artifact, "file_id": fid, "template": template}
 
 
 def _job_form(seed: str | None) -> dict:
@@ -219,15 +287,158 @@ def _job_evaluate() -> dict:
     }
 
 
+def _append_unique(target: dict, key: str, values: list[str]) -> None:
+    current = target.get(key)
+    if not isinstance(current, list):
+        current = []
+    seen = {str(item).strip().lower() for item in current if str(item).strip()}
+    for value in values:
+        text = str(value or "").strip()
+        if text and text.lower() not in seen:
+            current.append(text)
+            seen.add(text.lower())
+    target[key] = current
+
+
+def _committee_agent(committee: dict, name: str) -> dict:
+    agents = committee.get("agents") or []
+    return next((a for a in agents if str(a.get("agent_name", "")).lower() == name.lower()), {})
+
+
+def _job_improve_tender(artifact: dict, file_id: str | None = None, template: str | None = None) -> dict:
+    """Patch the existing tender artifact using AI Tender Committee feedback."""
+    from pdf_renderer import build_pdf, normalize_template
+
+    if not isinstance(artifact, dict) or not isinstance(artifact.get("output"), dict):
+        raise RuntimeError("Improve tender requires an artifact with an output object")
+
+    import json as _json
+
+    edited = _json.loads(_json.dumps(artifact, ensure_ascii=False, default=str))
+    output = edited["output"]
+    intelligence = output.get("tender_intelligence") or {}
+    committee = intelligence.get("ai_tender_committee") or {}
+    priorities = committee.get("improvement_priorities") or intelligence.get("missing_or_weak_requirements") or []
+    if not committee and not priorities:
+        raise RuntimeError("No AI Committee feedback is available on this tender")
+
+    scope = output.setdefault("scope_of_work", {})
+    evaluation = output.setdefault("evaluation_criteria", {})
+    proposal_format = output.setdefault("proposal_format", {})
+    payment = output.setdefault("payment_terms", {})
+    terms = output.setdefault("general_terms", {})
+    instructions = output.setdefault("instructions_to_bidders", {})
+    award = output.setdefault("award_and_contract", {})
+    deliverables = output.setdefault("deliverables", {})
+    timeline = output.setdefault("timeline", {})
+
+    technical_agent = _committee_agent(committee, "Technical Agent")
+    commercial_agent = _committee_agent(committee, "Commercial Agent")
+    compliance_agent = _committee_agent(committee, "Compliance Agent")
+    delivery_agent = _committee_agent(committee, "Delivery Agent")
+    risk_agent = _committee_agent(committee, "Risk Agent")
+
+    _append_unique(scope, "general_requirements", [
+        "Vendors shall provide measurable acceptance criteria for each major workstream.",
+        "Vendors shall identify assumptions, exclusions, dependencies, and buyer inputs required for delivery.",
+        technical_agent.get("recommendation", ""),
+    ])
+    _append_unique(evaluation, "technical_parameters", [
+        "Completeness and measurability of the proposed technical solution.",
+        "Quality of implementation methodology, testing approach, and acceptance plan.",
+        "Strength of project team experience and support model.",
+        technical_agent.get("recommendation", ""),
+    ])
+
+    commercial_proposal = proposal_format.setdefault("commercial_proposal", {})
+    _append_unique(commercial_proposal, "pricing_requirements", [
+        "Provide a detailed price breakdown by deliverable, phase, and optional item.",
+        "State VAT treatment, currency, assumptions, exclusions, and validity period.",
+        commercial_agent.get("recommendation", ""),
+    ])
+    _append_unique(evaluation, "financial_parameters", [
+        "Total cost clarity and completeness of commercial breakdown.",
+        "Commercial assumptions, exclusions, and payment milestone alignment.",
+        commercial_agent.get("recommendation", ""),
+    ])
+    _append_unique(payment, "invoice_requirements", [
+        "Invoices shall reference accepted deliverables and include signed acceptance evidence.",
+        "Payment claims shall match the approved commercial breakdown and milestone plan.",
+    ])
+
+    _append_unique(terms, "compliance_requirements", [
+        "Bidders shall submit all mandatory documents in valid, readable, and current form.",
+        "The Buyer may reject incomplete, expired, inconsistent, or non-compliant submissions.",
+        compliance_agent.get("recommendation", ""),
+    ])
+    _append_unique(evaluation, "mandatory_criteria", [
+        {"criterion": "Submission of all mandatory eligibility and document requirements."},
+        {"criterion": "Compliance with submission format, deadline, and platform controls."},
+        {"criterion": "No unresolved conflict of interest or prohibited conduct declaration."},
+    ])
+    _append_unique(award, "vendor_document_rules", [
+        "Mandatory documents are pass/fail requirements unless the Buyer-Admin expressly waives a non-material defect.",
+        compliance_agent.get("recommendation", ""),
+    ])
+
+    _append_unique(deliverables, "reporting_requirements", [
+        "Weekly status reporting covering progress, risks, blockers, decisions, and upcoming milestones.",
+        "Final handover report confirming deliverable acceptance, open issues, and support transition.",
+        delivery_agent.get("recommendation", ""),
+    ])
+    _append_unique(deliverables, "work_order_process", [
+        "Each work package shall define scope, owner, due date, acceptance criteria, and approval workflow.",
+    ])
+    _append_unique(timeline, "project_phases", [
+        "Kickoff and requirements confirmation",
+        "Detailed design and implementation planning",
+        "Execution, testing, acceptance, and handover",
+        delivery_agent.get("recommendation", ""),
+    ])
+
+    _append_unique(instructions, "submission_rules", [
+        "Bidders shall raise clarification questions before the clarification deadline through the approved channel.",
+        "Bidders shall clearly list deviations, assumptions, and exclusions in their proposals.",
+        risk_agent.get("recommendation", ""),
+    ])
+    if instructions.get("clarifications_process"):
+        instructions["clarifications_process"] = (
+            str(instructions["clarifications_process"]).rstrip()
+            + " All bidder questions, buyer responses, and addenda shall be controlled through the approved clarification process and shared consistently with eligible bidders."
+        )
+
+    output["ai_committee_edit_applied"] = {
+        "applied": True,
+        "source": "AI Tender Committee",
+        "final_score": committee.get("final_score"),
+        "priorities": priorities,
+        "edited_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    fid = file_id or uuid.uuid4().hex[:12]
+    template = normalize_template(template)
+    json_path = OUTPUTS / f"tender_{fid}.json"
+    pdf_path = OUTPUTS / f"tender_{fid}_{template}.pdf"
+    default_pdf_path = OUTPUTS / f"tender_{fid}.pdf"
+    json_path.write_text(_json.dumps(edited, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+    build_pdf(edited, pdf_path, template=template)
+    build_pdf(edited, default_pdf_path, template=template)
+    return {"artifact": edited, "file_id": fid, "template": template, "edited": True}
+
+
 # ── Request models for synchronous endpoints ─────────────────────────────────────
 
 class SeedReq(BaseModel):
     seed: str | None = None
+    template: str | None = None
+    form_overrides: dict[str, Any] | None = None
 
 
 class GuidedDraftReq(BaseModel):
     project_name: str
     scope_text: str
+    template: str | None = None
+    form_overrides: dict[str, Any] | None = None
 
 
 class SowReviewReq(BaseModel):
@@ -244,12 +455,18 @@ class ValidateReq(BaseModel):
     document_types: list[str] = []   # doc_type strings; converted to DocumentMeta below
 
 
+class ImproveTenderReq(BaseModel):
+    artifact: dict
+    file_id: str | None = None
+    template: str | None = None
+
+
 # ── API: job-launching endpoints ─────────────────────────────────────────────────
 
 @app.post("/api/jobs/draft")
 def start_draft(req: SeedReq):
     job = _new_job("draft")
-    _run_async(job, _job_full_draft, req.seed or None, None)
+    _run_async(job, _job_full_draft, req.seed or None, None, None, req.template, req.form_overrides)
     return {"job_id": job.id}
 
 
@@ -260,7 +477,7 @@ def start_guided_draft(req: GuidedDraftReq):
         f"Scope of Work:\n{req.scope_text.strip()}"
     )
     job = _new_job("guided draft")
-    _run_async(job, _job_full_draft, req.project_name.strip() or None, None, scope_text)
+    _run_async(job, _job_full_draft, req.project_name.strip() or None, None, scope_text, req.template, req.form_overrides)
     return {"job_id": job.id}
 
 
@@ -272,11 +489,15 @@ def start_sow_review(req: SowReviewReq):
 
 
 @app.post("/api/jobs/draft-sow")
-async def start_draft_sow(file: UploadFile = File(...)):
+async def start_draft_sow(file: UploadFile = File(...), template: str | None = Form(None), form_overrides: str | None = Form(None)):
     path = UPLOADS / f"{uuid.uuid4().hex[:8]}_{file.filename}"
     path.write_bytes(await file.read())
+    overrides = None
+    if form_overrides:
+        import json as _json
+        overrides = _json.loads(form_overrides)
     job = _new_job("draft")
-    _run_async(job, _job_full_draft, None, str(path))
+    _run_async(job, _job_full_draft, None, str(path), None, template, overrides)
     return {"job_id": job.id}
 
 
@@ -320,6 +541,13 @@ def start_validate(req: ValidateReq):
 def start_evaluate():
     job = _new_job("evaluate")
     _run_async(job, _job_evaluate)
+    return {"job_id": job.id}
+
+
+@app.post("/api/jobs/improve-tender")
+def start_improve_tender(req: ImproveTenderReq):
+    job = _new_job("improve tender")
+    _run_async(job, _job_improve_tender, req.artifact, req.file_id, req.template)
     return {"job_id": job.id}
 
 
@@ -385,9 +613,20 @@ def kb_search(q: str, k: int = 5):
 
 
 @app.get("/api/download/{file_id}/{kind}")
-def download(file_id: str, kind: str):
+def download(file_id: str, kind: str, template: str | None = None):
+    from pdf_renderer import build_pdf, normalize_template
+
     ext = "pdf" if kind == "pdf" else "json"
     path = OUTPUTS / f"tender_{file_id}.{ext}"
+    if ext == "pdf" and template:
+        template = normalize_template(template)
+        path = OUTPUTS / f"tender_{file_id}_{template}.pdf"
+        if not path.exists():
+            json_path = OUTPUTS / f"tender_{file_id}.json"
+            if json_path.exists():
+                import json as _json
+                artifact = _json.loads(json_path.read_text(encoding="utf-8"))
+                build_pdf(artifact, path, template=template)
     if not path.exists():
         raise HTTPException(404, "file not found")
     media = "application/pdf" if ext == "pdf" else "application/json"

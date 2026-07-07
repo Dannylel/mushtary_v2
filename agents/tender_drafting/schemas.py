@@ -260,9 +260,21 @@ class EvaluationSection(BaseModel):
 
 # ── SECTION 15: PAYMENT TERMS ────────────────────────────────────────────────
 
+class PaymentScheduleItem(BaseModel):
+    milestone: str
+    payment_trigger: str
+    supporting_evidence: str
+    invoice_timing: str
+    payment_percentage_or_amount: str | None = None
+
+
 class PaymentTerms(BaseModel):
     payment_basis: str
+    payment_schedule: list[PaymentScheduleItem] = Field(default_factory=list)
     invoice_requirements: list[str]
+    payment_controls: list[str] = Field(default_factory=list)
+    tax_and_currency: str | None = None
+    withholding_retention: str | None = None
     payment_timeline: str
 
 
@@ -544,7 +556,22 @@ DRAFT_FALLBACK = TenderDraft(
     ),
     payment_terms=PaymentTerms(
         payment_basis="Milestone-based payment after written acceptance.",
+        payment_schedule=[
+            PaymentScheduleItem(
+                milestone="Accepted deliverable or milestone",
+                payment_trigger="Buyer written acceptance recorded on the Mushtarry platform.",
+                supporting_evidence="Accepted deliverable, completion evidence, and valid invoice.",
+                invoice_timing="Invoice may be submitted after buyer acceptance.",
+                payment_percentage_or_amount="As stated in the approved contract or Work Order.",
+            )
+        ],
         invoice_requirements=["Valid invoice", "Signed acceptance certificate"],
+        payment_controls=[
+            "No payment is due for rejected, incomplete, or unsupported deliverables.",
+            "All invoices and supporting documents must be submitted through the Mushtarry platform.",
+        ],
+        tax_and_currency="Prices and invoices shall be in Saudi Riyals unless the buyer approves otherwise. VAT shall be shown separately where applicable.",
+        withholding_retention="Any retention or withholding applies only where stated in the tender data sheet or final contract.",
         payment_timeline="Within the buyer-approved payment cycle.",
     ),
     annexures=[

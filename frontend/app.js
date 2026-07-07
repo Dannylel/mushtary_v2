@@ -14,6 +14,94 @@ const DOC_TYPES = [
 ];
 
 let lastHealthPromptPatch = null;
+let platformCategories = {};
+let lastDraftResult = null;
+const PDF_TEMPLATES = [
+  ["premium_bw", "Premium B/W"],
+  ["modern_bw", "Modern B/W"],
+];
+
+function selectedPdfTemplate() {
+  const picked = $("input[name='pdfTemplate']:checked");
+  return picked ? picked.value : "premium_bw";
+}
+
+function checked(id) { return !!$(id)?.checked; }
+function value(id) { return ($(id)?.value || "").trim(); }
+function numberOrNull(id) {
+  const raw = value(id);
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+function syncDraftSubcategories() {
+  const category = value("#draftCategory");
+  const sub = $("#draftSubcategory");
+  if (!sub) return;
+  const items = platformCategories[category] || [];
+  sub.innerHTML = items.map(x => `<option>${esc(x)}</option>`).join("");
+}
+
+function evaluationWeights(model) {
+  const match = String(model || "").match(/(\d+)\s*\/\s*(\d+)/);
+  if (!match) return [70, 30];
+  return [Number(match[1]), Number(match[2])];
+}
+
+function collectDraftOverrides() {
+  const evaluation_model = value("#draftEvaluationModel") || "70/30";
+  const [technical_weight, financial_weight] = evaluationWeights(evaluation_model);
+  return {
+    category: value("#draftCategory") || undefined,
+    subcategory: value("#draftSubcategory") || undefined,
+    tender_type: value("#draftTenderType") || undefined,
+    procurement_method: value("#draftProcurementMethod") || undefined,
+    issue_date: value("#draftIssueDate") || undefined,
+    clarification_deadline: value("#draftClarificationDate") || undefined,
+    submission_deadline: value("#draftSubmissionDate") || undefined,
+    submission_time: value("#draftSubmissionTime") || undefined,
+    opening_date: value("#draftOpeningDate") || undefined,
+    site_visit_required: checked("#draftSiteVisitRequired"),
+    site_visit_date: value("#draftSiteVisitDate") || undefined,
+    bid_security_required: checked("#draftBidSecurityRequired"),
+    bid_security_amount_or_percentage: value("#draftBidSecurityAmount") || undefined,
+    performance_bond_required: checked("#draftPerformanceBondRequired"),
+    performance_bond_percentage: numberOrNull("#draftPerformanceBondPct"),
+    local_presence_required: checked("#draftLocalPresenceRequired"),
+    saudization_required: checked("#draftSaudizationRequired"),
+    confidentiality_required: checked("#draftConfidentialityRequired"),
+    evaluation_model,
+    technical_weight,
+    financial_weight,
+    minimum_score: numberOrNull("#draftMinimumScore"),
+    contract_duration: value("#draftContractDuration") || undefined,
+    submission_controls: {
+      separate_technical_commercial: checked("#draftSeparateTechCommercial"),
+      late_submission_allowed: checked("#draftLateSubmissionAllowed"),
+    },
+  };
+}
+
+function isoDatePlus(days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function setDefaultDraftDates() {
+  const defaults = [
+    ["#draftIssueDate", 0],
+    ["#draftSiteVisitDate", 5],
+    ["#draftClarificationDate", 7],
+    ["#draftSubmissionDate", 14],
+    ["#draftOpeningDate", 15],
+  ];
+  defaults.forEach(([id, days]) => {
+    const el = $(id);
+    if (el && !el.value) el.value = isoDatePlus(days);
+  });
+}
 
 // ── Navigation ────────────────────────────────────────────────────────────────
 function show(view) {
@@ -164,49 +252,144 @@ function docList(title, docs) {
 }
 
 // ── DRAFT: render the full 18-section tender (mirrors the PDF layout) ───────────
+function scoreNum(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.round(n) : null;
+}
+
+function findHealthAgent(ti, words) {
+  const agents = ti.health_agents || [];
+  return agents.find(a => {
+    const text = `${a.agent_name || ""} ${a.role || ""}`.toLowerCase();
+    return words.some(w => text.includes(w));
+  }) || null;
+}
+
+function buildAITenderCommittee(ti) {
+  if (ti.ai_tender_committee && Array.isArray(ti.ai_tender_committee.agents)) {
+    const committee = ti.ai_tender_committee;
+    return {
+      rows: committee.agents.map(a => ({
+        agent: a.agent_name || "AI Agent",
+        score: scoreNum(a.score),
+        focus: a.focus || a.summary || "",
+        summary: a.summary || "",
+        recommendation: a.recommendation || "",
+      })),
+      finalScore: scoreNum(committee.final_score),
+      recommendation: committee.final_recommendation || "Buyer review required before publication.",
+      priorities: committee.improvement_priorities || [],
+      reasoning: committee.committee_reasoning || [],
+    };
+  }
+
+  const technical = findHealthAgent(ti, ["scope", "technical", "clarity"]);
+  const commercial = findHealthAgent(ti, ["commercial"]);
+  const compliance = findHealthAgent(ti, ["compliance"]);
+  const delivery = findHealthAgent(ti, ["scope", "deliverable", "milestone", "timeline"]);
+  const risk = findHealthAgent(ti, ["participation", "risk", "vendor"]);
+
+  const rows = [
+    ["Technical Agent", scoreNum(ti.scope_clarity ?? technical?.score), "Scope depth, technical clarity, acceptance criteria"],
+    ["Commercial Agent", scoreNum(ti.commercial_clarity ?? commercial?.score), "Pricing clarity, payment terms, commercial packaging"],
+    ["Compliance Agent", scoreNum(ti.compliance_readiness ?? compliance?.score), "Documents, eligibility, governance, approval controls"],
+    ["Delivery Agent", scoreNum(delivery?.score ?? ti.scope_clarity), "Deliverables, milestones, implementation readiness"],
+    ["Risk Agent", scoreNum(risk?.score ?? ti.vendor_participation_score), "Vendor question risk and participation confidence"],
+  ].map(([agent, score, focus]) => ({ agent, score, focus }));
+
+  return {
+    rows,
+    finalScore: scoreNum(ti.tender_quality_score),
+    recommendation: ti.publish_readiness || ti.improvement_summary || "Buyer review required before publication.",
+    priorities: [],
+    reasoning: [],
+  };
+}
+
+function renderAITenderCommittee(committee) {
+  const rowHtml = committee.rows.map(r => `
+    <tr>
+      <td><b>${esc(r.agent)}</b><span>${esc(r.focus)}</span></td>
+      <td><span class="committee-score">${esc(r.score ?? "—")}</span></td>
+    </tr>`).join("");
+  return `<div class="committee-box">
+    <table class="committee-table">
+      <thead><tr><th>AI Agent</th><th>Score</th></tr></thead>
+      <tbody>
+        ${rowHtml}
+        <tr class="committee-final"><td>Final AI Recommendation</td><td><span class="committee-score">${esc(committee.finalScore ?? "—")}</span></td></tr>
+      </tbody>
+    </table>
+    ${committee.priorities && committee.priorities.length ? sub("Improvement Priorities", ul(committee.priorities)) : ""}
+    ${committee.reasoning && committee.reasoning.length ? sub("Committee Reasoning", ul(committee.reasoning)) : ""}
+    <div class="hint">${esc(committee.recommendation)}</div>
+  </div>`;
+}
+
 function buildHealthPromptPatch(form, ti) {
   if (!ti || ti.tender_quality_score == null) return null;
   const title = form.tender_title || "Tender";
   const baseScope = form.scope_of_work || form.project_objective || "";
+  const committee = buildAITenderCommittee(ti);
   const findings = (ti.findings || [])
     .filter(f => ["high", "medium"].includes(String(f.severity || "").toLowerCase()))
     .slice(0, 6);
   const missing = (ti.missing_or_weak_requirements || []).slice(0, 6);
   const recommendations = findings.map(f => f.recommendation).filter(Boolean);
+  const weakAgents = committee.rows
+    .filter(r => r.score !== null && r.score < 90)
+    .map(r => `- Improve ${r.agent}: ${r.score}/100 (${r.focus}).`);
   const patchLines = [
-    "Health feedback to address before regenerating:",
+    "AI Tender Committee evaluation to address before regenerating:",
+    ...committee.rows.map(r => `- ${r.agent}: ${r.score ?? "not scored"}/100 - ${r.focus}`),
+    `- Final AI Recommendation: ${committee.finalScore ?? "not scored"}/100`,
+    "",
+    "Priority improvements from the committee:",
+    ...(weakAgents.length ? weakAgents : ["- Maintain current committee strengths while tightening tender clarity."]),
+    ...(committee.priorities || []).map(x => `- ${x}`),
     ...missing.map(x => `- Add/clarify: ${x}`),
     ...recommendations.map(x => `- ${x}`),
   ];
 
   return {
     projectName: title,
-    scopeText: [
+    visibleScopeText: baseScope || `Scope of work for ${title}.`,
+    editScopeText: [
       baseScope || `Scope of work for ${title}.`,
       "",
       patchLines.join("\n"),
       "",
-      "Keep the original buyer intent. Do not rewrite unrelated commercial or compliance sections unless needed. Focus the next draft on improving the project objective, deliverables, acceptance criteria, timeline, and mandatory document requirements.",
+      "Keep the original buyer intent. Use the AI Tender Committee evaluation to improve the tender draft, especially weaker technical, commercial, compliance, delivery, and risk signals. Do not rewrite unrelated sections unless needed.",
     ].join("\n"),
   };
 }
 
 function applyHealthPromptPatch() {
-  if (!lastHealthPromptPatch) return;
-  $("#guidedProjectName").value = lastHealthPromptPatch.projectName || "";
-  $("#guidedScope").value = lastHealthPromptPatch.scopeText || "";
-  $("#guidedStatus").textContent = "Health feedback applied to the existing prompt. Review the additions, then generate again.";
-  $("#sowReviewResult").innerHTML = "";
-  show("draft");
-  $("#guidedScope").scrollIntoView({ behavior: "smooth", block: "center" });
+  if (!lastDraftResult || !lastDraftResult.artifact) return;
+  runJob({
+    target: "#draftResult",
+    loadMain: "Editing tender with AI committee feedback...",
+    loadSub: "Applying committee priorities to the existing tender draft and regenerating the PDF",
+    start: () => fetch("/api/jobs/improve-tender", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        artifact: lastDraftResult.artifact,
+        file_id: lastDraftResult.file_id,
+        template: selectedPdfTemplate(),
+      }),
+    }).then(r => r.json()),
+    render: renderDraft,
+  });
 }
 window.applyHealthPromptPatch = applyHealthPromptPatch;
 
 function renderDraft(result) {
+  lastDraftResult = result;
   const artifact = result.artifact || {};
   const o = artifact.output || {};
   const form = artifact.input_snapshot || {};   // the buyer form — source of buyer-stated facts
   const fid = result.file_id;
+  const activeTemplate = result.template || selectedPdfTemplate();
 
   const meta = o.metadata || {};
   const ds = o.tender_data_sheet || {};
@@ -240,7 +423,8 @@ function renderDraft(result) {
       sub("Reasoning", ul(a.reasoning_summary || [])) +
       ul(a.signals || [])
     );
-    sections.push(block("AI", "Tender Health Score",
+    const committee = buildAITenderCommittee(ti);
+    sections.push(block("AI", "AI Tender Committee",
       kv([
         ["Tender Quality Score", `${ti.tender_quality_score}/100`],
         ["Scope Clarity", `${ti.scope_clarity}%`],
@@ -252,13 +436,13 @@ function renderDraft(result) {
         ["Publish Readiness", ti.publish_readiness],
         ["Document Status", ti.document_status],
       ]) +
+      sub("AI Tender Committee", renderAITenderCommittee(committee)) +
       sub("AI Review Summary", para(ti.improvement_summary)) +
       sub("Committee Reasoning", ul(ti.committee_reasoning)) +
-      sub("Tender Health Agent Committee", ul(healthAgents, x => x)) +
       sub("Strengths", ul(ti.strengths)) +
       sub("Findings and Recommended Improvements", ul(findings, x => x)) +
       sub("Missing or Weak Requirements", ul(ti.missing_or_weak_requirements)) +
-      `<div class="toolbar" style="margin-top:14px"><button class="btn ghost" onclick="applyHealthPromptPatch()">Apply Health Feedback to Prompt</button></div>`
+      `<div class="toolbar" style="margin-top:14px"><button class="btn ghost" onclick="applyHealthPromptPatch()">Edit This Tender With AI Committee Feedback</button></div>`
     ));
   }
 
@@ -426,7 +610,8 @@ function renderDraft(result) {
       <span class="badge draft dot">DRAFT · pending buyer approval</span>
     </div>
     <div class="toolbar" style="margin-bottom:16px">
-      ${fid ? `<a class="btn primary" href="/api/download/${fid}/pdf" target="_blank">⬇ Download PDF</a>
+      ${fid ? `<a class="btn primary" href="/api/download/${fid}/pdf?template=${encodeURIComponent(activeTemplate)}" target="_blank">⬇ Download ${esc(PDF_TEMPLATES.find(([v]) => v === activeTemplate)?.[1] || "PDF")}</a>
+      ${PDF_TEMPLATES.filter(([v]) => v !== activeTemplate).map(([v, label]) => `<a class="btn ghost" href="/api/download/${fid}/pdf?template=${encodeURIComponent(v)}" target="_blank">⬇ ${esc(label)}</a>`).join("")}
       <a class="btn ghost" href="/api/download/${fid}/json" target="_blank">⬇ JSON</a>` : ""}
     </div>
     ${sections.join("")}
@@ -436,13 +621,15 @@ function renderDraft(result) {
 // ── DRAFT (seed) ───────────────────────────────────────────────────────────────
 $("#draftBtn").addEventListener("click", () => {
   const seed = $("#draftSeed").value.trim();
+  const template = selectedPdfTemplate();
+  const form_overrides = collectDraftOverrides();
   runJob({
     target: "#draftResult",
     loadMain: "Drafting your tender…",
     loadSub: "Inventing the buyer brief, then drafting 4 sections in parallel — watch the console below",
     start: () => fetch("/api/jobs/draft", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ seed }),
+      body: JSON.stringify({ seed, template, form_overrides }),
     }).then(r => r.json()),
     render: renderDraft,
   });
@@ -501,6 +688,8 @@ $("#reviewSowBtn").addEventListener("click", () => {
 $("#guidedDraftBtn").addEventListener("click", () => {
   const project_name = $("#guidedProjectName").value.trim();
   const scope_text = $("#guidedScope").value.trim();
+  const template = selectedPdfTemplate();
+  const form_overrides = collectDraftOverrides();
   if (!project_name || !scope_text) {
     $("#draftResult").innerHTML = errorHTML("Add both the project name and scope of work first.");
     return;
@@ -511,7 +700,7 @@ $("#guidedDraftBtn").addEventListener("click", () => {
     loadSub: "Extracting buyer form, then running the expert tender section agents",
     start: () => fetch("/api/jobs/draft-guided", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ project_name, scope_text }),
+      body: JSON.stringify({ project_name, scope_text, template, form_overrides }),
     }).then(r => r.json()),
     render: renderDraft,
   });
@@ -545,6 +734,8 @@ $("#extractBtn").addEventListener("click", () => {
 $("#extractDraftBtn").addEventListener("click", () => {
   if (!pickedFile) return;
   const fd = new FormData(); fd.append("file", pickedFile);
+  fd.append("template", selectedPdfTemplate());
+  fd.append("form_overrides", JSON.stringify(collectDraftOverrides()));
   runJob({
     target: "#extractResult",
     loadMain: "Full pipeline: extracting, then drafting the complete tender…",
@@ -743,8 +934,16 @@ async function kbSearch() {
     $("#envModel").textContent = m.model;
     $("#envEmbed").textContent = m.embed_model;
     $("#envKb").textContent = m.kb_available ? "ready" : "empty";
+    platformCategories = m.categories || {};
     const sel = $("#vCategory");
     sel.innerHTML = Object.keys(m.categories || {}).map(c => `<option>${esc(c)}</option>`).join("");
+    const draftCategory = $("#draftCategory");
+    if (draftCategory) {
+      draftCategory.innerHTML = Object.keys(platformCategories).map(c => `<option>${esc(c)}</option>`).join("");
+      draftCategory.addEventListener("change", syncDraftSubcategories);
+      syncDraftSubcategories();
+    }
+    setDefaultDraftDates();
     $("#kbCount").textContent = m.kb_count ?? (m.kb_available ? "—" : "0");
   } catch (e) {
     console.warn("meta load failed", e);

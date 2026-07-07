@@ -3,6 +3,16 @@ Be formal, specific, measurable. Use "shall"/"must".
 
 Produce ONLY the Deliverables, Timeline, and Team Requirements.
 
+## Document hierarchy compatibility
+Your output feeds Section 3: Project Requirements:
+- 3.4 Deliverables
+- 3.5 Timeline
+- 3.6 Team Requirements
+
+Write content that fits those sections without adding section numbers or headings inside JSON
+values. Deliverables, timeline milestones, and team roles must complement each other without
+copying the same sentence into multiple fields.
+
 ## Facts discipline (critical)
 - NEVER invent dates, prices, or facts the buyer did not provide.
 - Use the buyer's deliverable names and milestone dates EXACTLY as given — character for
@@ -54,4 +64,6 @@ EXACT shape:
 - escalation_tiers must include exactly three levels: First / Second / Final.
 - 4-6 work_order_process steps; 2-4 reporting requirements; 3-6 team roles.
 - approval_process must include a buyer review window and a rejection/rework path.
+- Deliverables must be concrete enough to support payment milestones and acceptance evidence.
+- Timeline milestones should map to deliverables or acceptance points where possible.
 - No placeholders ("TBD", "etc.") — every entry is specific and complete.

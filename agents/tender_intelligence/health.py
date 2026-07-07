@@ -14,6 +14,8 @@ from agents.prompts import load_prompt
 from agents.tender_drafting.schemas import TenderDraft
 
 from .schemas import (
+    AITenderCommitteeAgentResult,
+    AITenderCommitteeOutput,
     TenderHealthAgentResult,
     TenderHealthAggregateOutput,
     TenderHealthFinding,
@@ -411,6 +413,188 @@ def _weak_requirements(findings: list[TenderHealthFinding]) -> list[str]:
     return weak
 
 
+def _ai_committee_agent(
+    *,
+    agent_name: str,
+    score: int,
+    focus: str,
+    strong_summary: str,
+    weak_summary: str,
+    recommendation: str,
+    findings: list[TenderHealthFinding],
+) -> AITenderCommitteeAgentResult:
+    return AITenderCommitteeAgentResult(
+        agent_name=agent_name,
+        score=max(0, min(100, score)),
+        focus=focus,
+        summary=strong_summary if score >= 85 else weak_summary,
+        recommendation=recommendation,
+        findings=findings,
+    )
+
+
+def _assess_ai_tender_committee(draft: TenderDraft, form: TenderBuyerForm) -> AITenderCommitteeOutput:
+    technical_findings: list[TenderHealthFinding] = []
+    technical_penalties: list[int] = []
+    technical_text = (
+        _text_len(form.technical_requirements)
+        + _text_len(form.methodology_requirements)
+        + sum(_text_len(c.description) + sum(_text_len(r) for r in c.requirements) for c in draft.scope_of_work.categories)
+    )
+    tech_params = len(draft.evaluation_criteria.technical_parameters)
+    if technical_text < 900:
+        technical_penalties.append(12)
+        technical_findings.append(_finding("Technical", "Medium", "Technical requirements may be too thin for technical comparison.", "Add measurable technical specifications, acceptance criteria, and implementation constraints.", "Technical content depth is below target."))
+    if tech_params < 4:
+        technical_penalties.append(10)
+        technical_findings.append(_finding("Technical", "Medium", "Technical scoring parameters are limited.", "Define clearer technical evaluation parameters for solution quality, methodology, team, and support.", f"Technical parameters: {tech_params}."))
+    if not form.methodology_requirements:
+        technical_penalties.append(6)
+    technical_score = _score_from_checks(100, technical_penalties)
+
+    commercial_findings: list[TenderHealthFinding] = []
+    commercial_penalties: list[int] = []
+    financial_params = len(draft.evaluation_criteria.financial_parameters)
+    pricing_rules = len(draft.proposal_format.commercial_proposal.pricing_requirements)
+    payment_detail = _text_len(draft.payment_terms.payment_basis) + sum(_text_len(x) for x in draft.payment_terms.invoice_requirements)
+    if financial_params < 3:
+        commercial_penalties.append(10)
+        commercial_findings.append(_finding("Commercial", "Medium", "Financial comparison rules need more structure.", "Clarify price breakdown, VAT, currency, assumptions, exclusions, and comparison basis.", f"Financial parameters: {financial_params}."))
+    if pricing_rules < 3:
+        commercial_penalties.append(8)
+        commercial_findings.append(_finding("Commercial", "Low", "Commercial proposal pricing rules are brief.", "Add pricing schedule, total cost ownership, validity, and exception requirements.", f"Pricing rules: {pricing_rules}."))
+    if payment_detail < 140:
+        commercial_penalties.append(8)
+    commercial_score = _score_from_checks(100, commercial_penalties)
+
+    compliance_findings: list[TenderHealthFinding] = []
+    compliance_penalties: list[int] = []
+    mandatory_docs = len(draft.award_and_contract.mandatory_documents)
+    pass_fail = len(draft.evaluation_criteria.mandatory_criteria)
+    controls = draft.instructions_to_bidders.submission_controls
+    if mandatory_docs < 3:
+        compliance_penalties.append(12)
+        compliance_findings.append(_finding("Compliance", "Medium", "Mandatory document coverage is limited.", "Require core legal, tax, authorization, and sector documents with validity rules.", f"Mandatory documents: {mandatory_docs}."))
+    if pass_fail < 3:
+        compliance_penalties.append(10)
+        compliance_findings.append(_finding("Compliance", "Medium", "Pass/fail compliance gates are too light.", "Add explicit eligibility, document, submission, conflict, and deadline pass/fail gates.", f"Pass/fail criteria: {pass_fail}."))
+    if not controls:
+        compliance_penalties.append(8)
+    compliance_score = _score_from_checks(100, compliance_penalties)
+
+    delivery_findings: list[TenderHealthFinding] = []
+    delivery_penalties: list[int] = []
+    deliverables = len(draft.deliverables.deliverables)
+    milestones = len(draft.timeline.milestones)
+    roles = len(draft.team_requirements.roles)
+    if deliverables < 4:
+        delivery_penalties.append(10)
+        delivery_findings.append(_finding("Delivery", "Medium", "Delivery package needs more named deliverables.", "Add deliverables with format, owner, review cycle, and acceptance rule.", f"Deliverables: {deliverables}."))
+    if milestones < 4:
+        delivery_penalties.append(10)
+        delivery_findings.append(_finding("Delivery", "Medium", "Delivery timeline needs clearer gates.", "Add milestones for kickoff, design, implementation, testing, handover, and acceptance.", f"Milestones: {milestones}."))
+    if roles < 2:
+        delivery_penalties.append(6)
+    delivery_score = _score_from_checks(100, delivery_penalties)
+
+    risk_findings: list[TenderHealthFinding] = []
+    risk_penalties: list[int] = []
+    for label, score in [
+        ("technical", technical_score),
+        ("commercial", commercial_score),
+        ("compliance", compliance_score),
+        ("delivery", delivery_score),
+    ]:
+        if score < 80:
+            risk_penalties.append(7)
+            risk_findings.append(_finding("Risk", "Medium", f"{label.title()} readiness is below target.", f"Resolve {label} findings before inviting vendors.", f"{label.title()} score: {score}."))
+    if _text_len(draft.instructions_to_bidders.clarifications_process) < 80:
+        risk_penalties.append(6)
+        risk_findings.append(_finding("Risk", "Low", "Clarification handling may be too brief.", "Clarify question channel, deadline, response publishing, and addenda controls.", "Clarifications process is brief."))
+    risk_score = _score_from_checks(100, risk_penalties)
+
+    agents = [
+        _ai_committee_agent(
+            agent_name="Technical Agent",
+            score=technical_score,
+            focus="Technical completeness, specifications, methodology, and acceptance criteria.",
+            strong_summary="Technical requirements are strong enough for vendor comparison.",
+            weak_summary="Technical requirements need more measurable detail before publication.",
+            recommendation="Tighten technical specs, methodology requirements, and technical evaluation parameters.",
+            findings=technical_findings,
+        ),
+        _ai_committee_agent(
+            agent_name="Commercial Agent",
+            score=commercial_score,
+            focus="Pricing structure, payment terms, commercial proposal readiness, and comparison basis.",
+            strong_summary="Commercial instructions are clear for vendor pricing.",
+            weak_summary="Commercial instructions need stronger pricing and payment detail.",
+            recommendation="Clarify financial evaluation, pricing schedules, VAT/currency rules, and payment linkage.",
+            findings=commercial_findings,
+        ),
+        _ai_committee_agent(
+            agent_name="Compliance Agent",
+            score=compliance_score,
+            focus="Documents, eligibility, legal gates, submission governance, and approval controls.",
+            strong_summary="Compliance controls are ready for buyer review.",
+            weak_summary="Compliance controls need stronger document and pass/fail coverage.",
+            recommendation="Expand mandatory documents, pass/fail gates, and submission controls.",
+            findings=compliance_findings,
+        ),
+        _ai_committee_agent(
+            agent_name="Delivery Agent",
+            score=delivery_score,
+            focus="Deliverables, milestones, roles, implementation readiness, and handover clarity.",
+            strong_summary="Delivery plan is clear enough for implementation planning.",
+            weak_summary="Delivery plan needs clearer deliverables, milestones, or roles.",
+            recommendation="Add named deliverables, phased milestones, owners, and acceptance gates.",
+            findings=delivery_findings,
+        ),
+        _ai_committee_agent(
+            agent_name="Risk Agent",
+            score=risk_score,
+            focus="Ambiguity, vendor question risk, participation confidence, and publication readiness.",
+            strong_summary="Overall tender risk is controlled for buyer review.",
+            weak_summary="Tender risk should be reduced before inviting vendors.",
+            recommendation="Prioritize the lowest committee scores and clarify vendor question controls.",
+            findings=risk_findings,
+        ),
+    ]
+    final_score = round(
+        technical_score * 0.25
+        + commercial_score * 0.20
+        + compliance_score * 0.20
+        + delivery_score * 0.20
+        + risk_score * 0.15
+    )
+    if final_score >= 85:
+        recommendation = "Ready for Buyer-Admin review with normal human approval controls."
+    elif final_score >= 70:
+        recommendation = "Needs targeted edits before publication; use the committee priorities to regenerate."
+    else:
+        recommendation = "Needs revision before buyer approval; committee risks are too high for vendor issue."
+
+    all_findings = [finding for agent in agents for finding in agent.findings]
+    priorities = []
+    for finding in all_findings:
+        if finding.recommendation and finding.recommendation not in priorities:
+            priorities.append(finding.recommendation)
+    if not priorities:
+        priorities.append("Maintain committee strengths and complete final Buyer-Admin review.")
+
+    return AITenderCommitteeOutput(
+        final_score=final_score,
+        final_recommendation=recommendation,
+        agents=agents,
+        improvement_priorities=priorities[:8],
+        committee_reasoning=[
+            "Technical, commercial, compliance, delivery, and risk were scored as separate buyer-facing AI committee roles.",
+            "Final score uses 25/20/20/20/15 weighting across the five AI agents.",
+            "This committee is site-only and supports iterative tender improvement; it is not inserted into the issued PDF.",
+        ],
+    )
+
+
 def _aggregate_fallback(agents: list[TenderHealthAgentResult], draft: TenderDraft) -> TenderHealthAggregateOutput:
     scope, commercial, compliance, participation = agents
     quality = round(
@@ -700,6 +884,7 @@ def assess_tender_health(draft: TenderDraft, form: TenderBuyerForm) -> TenderHea
     agents = [scope_agent, commercial_agent, compliance_agent, participation_agent]
     aggregate_fallback = _aggregate_fallback(agents, draft)
     aggregate = _run_llm_aggregator(draft=draft, agents=agents, fallback=aggregate_fallback)
+    ai_tender_committee = _assess_ai_tender_committee(draft, form)
     all_findings = [finding for agent in agents for finding in agent.findings]
 
     return TenderHealthScore(
@@ -713,6 +898,7 @@ def assess_tender_health(draft: TenderDraft, form: TenderBuyerForm) -> TenderHea
         publish_readiness=aggregate.publish_readiness,
         generated_at=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         health_agents=agents,
+        ai_tender_committee=ai_tender_committee,
         strengths=aggregate.strengths,
         findings=all_findings,
         missing_or_weak_requirements=aggregate.missing_or_weak_requirements,
