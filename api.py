@@ -125,11 +125,17 @@ def _apply_form_overrides(form, overrides: dict | None):
 
     data = form.model_dump(mode="json")
     simple_fields = [
+        "tender_title", "tender_id", "buyer_name", "buyer_description",
         "category", "subcategory", "tender_type", "procurement_method",
+        "location", "project_objective", "scope_of_work",
+        "technical_requirements", "methodology_requirements",
+        "estimated_value_sar", "budget_range", "payment_terms",
         "proposal_validity_days", "bid_security_required",
         "bid_security_amount_or_percentage", "performance_bond_required",
         "performance_bond_percentage", "performance_bond_validity",
-        "liquidated_damages_applicable", "liquidated_damages_rate",
+        "retention_percentage", "liquidated_damages_applicable", "liquidated_damages_rate",
+        "minimum_years_experience", "minimum_similar_projects",
+        "minimum_project_value_sar", "required_sector_license",
         "blacklist_declaration_required", "local_presence_required",
         "saudization_required", "confidentiality_required", "onsite_required",
         "evaluation_model", "technical_weight", "financial_weight",
@@ -157,6 +163,18 @@ def _apply_form_overrides(form, overrides: dict | None):
         controls = dict(data.get("submission_controls") or {})
         controls.update({k: v for k, v in overrides["submission_controls"].items() if v not in (None, "")})
         data["submission_controls"] = controls
+
+    list_fields = [
+        "deliverables", "timeline", "roles_and_responsibilities",
+        "eligibility_criteria", "required_certifications", "required_documents",
+        "mandatory_documents", "conditional_documents", "optional_documents",
+        "sector_specific_documents", "prestige_documents", "evaluation_criteria",
+        "mandatory_disqualification_criteria", "technical_evaluation_parameters",
+        "financial_evaluation_parameters",
+    ]
+    for field in list_fields:
+        if field in overrides and isinstance(overrides[field], list):
+            data[field] = overrides[field]
 
     from agents.buyer_form import TenderBuyerForm
     return TenderBuyerForm.model_validate(data)

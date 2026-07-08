@@ -22,8 +22,7 @@ const PDF_TEMPLATES = [
 ];
 
 function selectedPdfTemplate() {
-  const picked = $("input[name='pdfTemplate']:checked");
-  return picked ? picked.value : "premium_bw";
+  return "premium_bw";
 }
 
 function checked(id) { return !!$(id)?.checked; }
@@ -33,6 +32,40 @@ function numberOrNull(id) {
   if (!raw) return null;
   const n = Number(raw);
   return Number.isFinite(n) ? n : null;
+}
+
+function lines(id) {
+  return value(id).split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+}
+
+function checkedLabels(selector) {
+  return $$(selector).filter(x => x.checked).map(x => x.value.trim()).filter(Boolean);
+}
+
+function parseDelimitedRows(id, columns) {
+  return lines(id).map(line => {
+    const parts = line.split("|").map(x => x.trim());
+    return columns.reduce((row, col, i) => {
+      row[col] = parts[i] || "";
+      return row;
+    }, {});
+  }).filter(row => Object.values(row).some(Boolean));
+}
+
+function parseResponsibilities(id) {
+  return parseDelimitedRows(id, ["party", "responsibilities"]).map(row => ({
+    party: row.party,
+    responsibilities: row.responsibilities.split(";").map(x => x.trim()).filter(Boolean),
+  })).filter(row => row.party && row.responsibilities.length);
+}
+
+function parseDocumentRequirements(id, level) {
+  return checkedLabels(`${id} input[type="checkbox"]`).map(name => ({
+    name,
+    requirement_level: level,
+    category: "Buyer selected",
+    applicability: "As selected by buyer",
+  }));
 }
 
 function syncDraftSubcategories() {
@@ -53,10 +86,22 @@ function collectDraftOverrides() {
   const evaluation_model = value("#draftEvaluationModel") || "70/30";
   const [technical_weight, financial_weight] = evaluationWeights(evaluation_model);
   return {
+    tender_title: value("#draftTenderTitle") || undefined,
+    tender_id: value("#draftTenderId") || undefined,
+    buyer_name: value("#draftBuyerName") || undefined,
+    buyer_description: value("#draftBuyerDescription") || undefined,
     category: value("#draftCategory") || undefined,
     subcategory: value("#draftSubcategory") || undefined,
     tender_type: value("#draftTenderType") || undefined,
     procurement_method: value("#draftProcurementMethod") || undefined,
+    location: value("#draftLocation") || undefined,
+    project_objective: value("#draftProjectObjective") || undefined,
+    scope_of_work: value("#draftScope") || undefined,
+    technical_requirements: value("#draftTechnicalRequirements") || undefined,
+    methodology_requirements: value("#draftMethodologyRequirements") || undefined,
+    deliverables: parseDelimitedRows("#draftDeliverables", ["name", "description", "format"]),
+    timeline: parseDelimitedRows("#draftTimeline", ["milestone", "date"]),
+    roles_and_responsibilities: parseResponsibilities("#draftResponsibilities"),
     issue_date: value("#draftIssueDate") || undefined,
     clarification_deadline: value("#draftClarificationDate") || undefined,
     submission_deadline: value("#draftSubmissionDate") || undefined,
@@ -69,19 +114,59 @@ function collectDraftOverrides() {
     bid_security_amount_or_percentage: value("#draftBidSecurityAmount") || undefined,
     performance_bond_required: checked("#draftPerformanceBondRequired"),
     performance_bond_percentage: numberOrNull("#draftPerformanceBondPct"),
+    performance_bond_validity: value("#draftPerformanceBondValidity") || undefined,
+    retention_percentage: numberOrNull("#draftRetentionPct"),
+    liquidated_damages_applicable: checked("#draftLiquidatedDamages"),
+    liquidated_damages_rate: value("#draftLiquidatedDamagesRate") || undefined,
+    estimated_value_sar: numberOrNull("#draftEstimatedValue"),
+    budget_range: value("#draftBudgetRange") || undefined,
+    payment_terms: value("#draftPaymentTerms") || undefined,
+    eligibility_criteria: checkedLabels("#draftEligibilityCriteria input[type='checkbox']"),
+    minimum_years_experience: numberOrNull("#draftMinYears"),
+    minimum_similar_projects: numberOrNull("#draftMinProjects"),
+    minimum_project_value_sar: numberOrNull("#draftMinProjectValue"),
+    required_sector_license: value("#draftSectorLicense") || undefined,
+    required_certifications: checkedLabels("#draftCertifications input[type='checkbox']"),
+    blacklist_declaration_required: checked("#draftBlacklistDeclaration"),
     local_presence_required: checked("#draftLocalPresenceRequired"),
     saudization_required: checked("#draftSaudizationRequired"),
     confidentiality_required: checked("#draftConfidentialityRequired"),
+    onsite_required: checked("#draftOnsiteRequired"),
+    mandatory_documents: parseDocumentRequirements("#draftMandatoryDocs", "mandatory"),
+    conditional_documents: parseDocumentRequirements("#draftConditionalDocs", "conditional"),
+    sector_specific_documents: parseDocumentRequirements("#draftSectorDocs", "sector_specific"),
+    optional_documents: parseDocumentRequirements("#draftOptionalDocs", "optional"),
+    prestige_documents: parseDocumentRequirements("#draftPrestigeDocs", "prestige"),
+    required_documents: [
+      ...checkedLabels("#draftMandatoryDocs input[type='checkbox']"),
+      ...checkedLabels("#draftConditionalDocs input[type='checkbox']"),
+      ...checkedLabels("#draftSectorDocs input[type='checkbox']"),
+    ],
     evaluation_model,
     technical_weight,
     financial_weight,
     minimum_score: numberOrNull("#draftMinimumScore"),
+    evaluation_criteria: parseDelimitedRows("#draftEvaluationCriteria", ["name", "weight", "description"]).map(row => ({
+      ...row,
+      weight: Number(row.weight) || 0,
+    })),
+    mandatory_disqualification_criteria: checkedLabels("#draftDisqualificationCriteria input[type='checkbox']"),
+    technical_evaluation_parameters: lines("#draftTechnicalEvalParams"),
+    financial_evaluation_parameters: lines("#draftFinancialEvalParams"),
+    submission_method: value("#draftSubmissionMethod") || undefined,
     proposal_format: value("#draftProposalFormat") || undefined,
     contract_duration: value("#draftContractDuration") || undefined,
+    warranty_duration: value("#draftWarrantyDuration") || undefined,
     language_requirements: value("#draftLanguageRequirements") || undefined,
     submission_controls: {
+      platform_submission_only: checked("#draftPlatformOnly"),
       separate_technical_commercial: checked("#draftSeparateTechCommercial"),
+      max_file_size_mb: numberOrNull("#draftMaxFileSize"),
+      resubmission_allowed_before_deadline: checked("#draftResubmissionAllowed"),
+      lock_after_deadline: checked("#draftLockAfterDeadline"),
       late_submission_allowed: checked("#draftLateSubmissionAllowed"),
+      completeness_check_required: checked("#draftCompletenessCheck"),
+      timestamp_is_official: checked("#draftTimestampOfficial"),
       technical_file_format: value("#draftTechnicalFileFormat") || undefined,
       commercial_file_format: value("#draftCommercialFileFormat") || undefined,
     },
@@ -96,15 +181,15 @@ function isoDatePlus(days) {
 
 function setDefaultDraftDates() {
   const defaults = [
-    ["#draftIssueDate", 0],
-    ["#draftSiteVisitDate", 5],
-    ["#draftClarificationDate", 7],
-    ["#draftSubmissionDate", 14],
-    ["#draftOpeningDate", 15],
+    ["#draftIssueDate", "2026-06-02"],
+    ["#draftSiteVisitDate", "2026-06-08"],
+    ["#draftClarificationDate", "2026-06-12"],
+    ["#draftSubmissionDate", "2026-06-30"],
+    ["#draftOpeningDate", "2026-06-30"],
   ];
-  defaults.forEach(([id, days]) => {
+  defaults.forEach(([id, date]) => {
     const el = $(id);
-    if (el && !el.value) el.value = isoDatePlus(days);
+    if (el && !el.value) el.value = date;
   });
 }
 
@@ -727,8 +812,8 @@ function renderSowReview(result) {
 }
 
 $("#reviewSowBtn").addEventListener("click", () => {
-  const project_name = $("#guidedProjectName").value.trim();
-  const scope_text = $("#guidedScope").value.trim();
+  const project_name = $("#draftTenderTitle").value.trim();
+  const scope_text = $("#draftScope").value.trim();
   if (!scope_text) {
     $("#sowReviewResult").innerHTML = errorHTML("Write the scope of work first.");
     return;
@@ -744,8 +829,7 @@ $("#reviewSowBtn").addEventListener("click", () => {
     render: result => {
       const rewritten = result && result.review && result.review.rewritten_scope;
       if (rewritten) {
-        $("#guidedScope").value = rewritten;
-        $("#guidedStatus").textContent = "Scope rewritten. Edit it if needed, then generate the tender.";
+        $("#draftScope").value = rewritten;
       }
       return renderSowReview(result);
     },
@@ -753,8 +837,8 @@ $("#reviewSowBtn").addEventListener("click", () => {
 });
 
 $("#guidedDraftBtn").addEventListener("click", () => {
-  const project_name = $("#guidedProjectName").value.trim();
-  const scope_text = $("#guidedScope").value.trim();
+  const project_name = $("#draftTenderTitle").value.trim();
+  const scope_text = $("#draftScope").value.trim();
   const template = selectedPdfTemplate();
   const form_overrides = collectDraftOverrides();
   if (!project_name || !scope_text) {
@@ -1007,8 +1091,13 @@ async function kbSearch() {
     const draftCategory = $("#draftCategory");
     if (draftCategory) {
       draftCategory.innerHTML = Object.keys(platformCategories).map(c => `<option>${esc(c)}</option>`).join("");
+      if (platformCategories["Information Technology"]) draftCategory.value = "Information Technology";
       draftCategory.addEventListener("change", syncDraftSubcategories);
       syncDraftSubcategories();
+      const draftSubcategory = $("#draftSubcategory");
+      if (draftSubcategory && [...draftSubcategory.options].some(o => o.value === "IT Infrastructure & Data Centers")) {
+        draftSubcategory.value = "IT Infrastructure & Data Centers";
+      }
     }
     setDefaultDraftDates();
     $("#kbCount").textContent = m.kb_count ?? (m.kb_available ? "—" : "0");
