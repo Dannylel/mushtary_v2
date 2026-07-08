@@ -479,6 +479,18 @@ class ImproveTenderReq(BaseModel):
     template: str | None = None
 
 
+class VendorShortlistReq(BaseModel):
+    category: str | None = None
+    subcategory: str | None = None
+    estimated_value_sar: float | None = None
+    timeline_days: int | None = None
+    required_certifications: list[str] = []
+    minimum_years_experience: int | None = None
+    minimum_similar_projects: int | None = None
+    local_presence_required: bool = True
+    required_sector_license: str | None = None
+
+
 # ── API: job-launching endpoints ─────────────────────────────────────────────────
 
 @app.post("/api/jobs/draft")
@@ -628,6 +640,54 @@ def kb_search(q: str, k: int = 5):
             for h in hits
         ],
     }
+
+
+@app.get("/api/reputation")
+def reputation_snapshot():
+    from agents.reputation import build_marketplace_snapshot
+
+    return build_marketplace_snapshot()
+
+
+@app.get("/api/accounts/vendors")
+def vendors():
+    from agents.reputation import list_vendors
+
+    return {"vendors": list_vendors()}
+
+
+@app.get("/api/accounts/vendors/{vendor_id}")
+def vendor_profile(vendor_id: str):
+    from agents.reputation import get_vendor
+
+    vendor = get_vendor(vendor_id)
+    if not vendor:
+        raise HTTPException(404, "vendor not found")
+    return {"vendor": vendor}
+
+
+@app.get("/api/accounts/buyers")
+def buyers():
+    from agents.reputation import list_buyers
+
+    return {"buyers": list_buyers()}
+
+
+@app.get("/api/accounts/buyers/{buyer_id}")
+def buyer_profile(buyer_id: str):
+    from agents.reputation import get_buyer
+
+    buyer = get_buyer(buyer_id)
+    if not buyer:
+        raise HTTPException(404, "buyer not found")
+    return {"buyer": buyer}
+
+
+@app.post("/api/intelligence/shortlist")
+def vendor_shortlist(req: VendorShortlistReq):
+    from agents.reputation import shortlist_vendors
+
+    return shortlist_vendors(req.model_dump(mode="json"))
 
 
 @app.get("/api/download/{file_id}/{kind}")

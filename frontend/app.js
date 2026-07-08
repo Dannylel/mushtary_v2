@@ -16,6 +16,7 @@ const DOC_TYPES = [
 let lastHealthPromptPatch = null;
 let platformCategories = {};
 let lastDraftResult = null;
+let reputationData = null;
 const PDF_TEMPLATES = [
   ["premium_bw", "Premium B/W"],
   ["modern_bw", "Modern B/W"],
@@ -1050,6 +1051,230 @@ function renderEvaluation(result) {
 }
 
 // ── KB SEARCH ────────────────────────────────────────────────────────────────────
+// Reputation Hub
+function sar(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "-";
+  return "SAR " + new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(n);
+}
+
+function scoreBadgeClass(value) {
+  const n = Number(value);
+  if (n >= 80) return "ok";
+  if (n >= 65) return "warn";
+  return "bad";
+}
+
+function riskBadgeClass(value) {
+  const text = String(value || "").toLowerCase();
+  if (text === "low") return "ok";
+  if (text === "medium") return "warn";
+  return "bad";
+}
+
+function badgeList(items) {
+  const list = (items || []).slice(0, 3);
+  if (!list.length) return "<span class='empty'>No special badges</span>";
+  return list.map(item => `<span class="mini-badge">${esc(item)}</span>`).join("");
+}
+
+function renderReputationHub(data) {
+  reputationData = data;
+  const summary = data.summary || {};
+  $("#reputationSnapshot").innerHTML = `<div class="rep-summary">
+    <div class="intel-grid">
+      ${metricCard("Buyer Accounts", summary.buyer_count, "Demo BRI profiles")}
+      ${metricCard("Vendor Accounts", summary.vendor_count, "Demo VRI profiles")}
+      ${metricCard("Average Vendor VRI", summary.average_vendor_vri, "Category-aware reputation")}
+      ${metricCard("Average Buyer BRI", summary.average_buyer_bri, "Payment and fairness")}
+      ${metricCard("Elite/Strategic Vendors", summary.elite_or_strategic_vendors, "VRI 75+")}
+      ${metricCard("Trusted Buyers", summary.trusted_or_strategic_buyers, "BRI 75+")}
+    </div>
+  </div>`;
+
+  const vendors = (data.vendors || []).slice().sort((a, b) => b.vri.category_specific - a.vri.category_specific);
+  const buyers = (data.buyers || []).slice().sort((a, b) => b.bri.overall - a.bri.overall);
+  $("#reputationAccounts").innerHTML = `<div class="rep-columns">
+    <div class="section-block">
+      <div class="sb-head"><span class="num">V</span>Vendor Accounts</div>
+      <div class="sb-body">${renderVendorAccountTable(vendors)}</div>
+    </div>
+    <div class="section-block">
+      <div class="sb-head"><span class="num">B</span>Buyer Accounts</div>
+      <div class="sb-body">${renderBuyerAccountTable(buyers)}</div>
+    </div>
+  </div>`;
+}
+
+function renderVendorAccountTable(vendors) {
+  const rows = vendors.map(v => `<tr>
+    <td><b>${esc(v.name)}</b><span>${esc(v.account_id)} - ${esc(v.city)}</span></td>
+    <td>${esc(v.categories[0])}<span>${esc(v.subcategories[0])}</span></td>
+    <td><b>${esc(v.vri.category_specific)}</b><span>${esc(v.vri.level)}</span></td>
+    <td><span class="badge ${scoreBadgeClass(v.vri.category_specific)}">${esc(v.badge)}</span><span>${badgeList(v.special_badges)}</span></td>
+    <td>${esc(v.rating)}/5<span>${esc(v.completed_contracts)} contracts</span></td>
+  </tr>`).join("");
+  return `<div class="rep-table-wrap"><table class="rep-table">
+    <thead><tr><th>Vendor</th><th>Category</th><th>VRI</th><th>Badge</th><th>Rating</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+function renderBuyerAccountTable(buyers) {
+  const rows = buyers.map(b => `<tr>
+    <td><b>${esc(b.name)}</b><span>${esc(b.account_id)} - ${esc(b.city)}</span></td>
+    <td>${esc(b.primary_category)}<span>${esc(b.primary_subcategory)}</span></td>
+    <td><b>${esc(b.bri.overall)}</b><span>${esc(b.bri.level)}</span></td>
+    <td><span class="badge ${scoreBadgeClass(b.bri.overall)}">${esc(b.badge)}</span><span>${badgeList(b.special_badges)}</span></td>
+    <td>${esc(b.payment_reliability)}%<span>${esc(b.dispute_rate)}% dispute rate</span></td>
+  </tr>`).join("");
+  return `<div class="rep-table-wrap"><table class="rep-table">
+    <thead><tr><th>Buyer</th><th>Category</th><th>BRI</th><th>Badge</th><th>Payment</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+async function loadReputationHub() {
+  const snapshot = $("#reputationSnapshot");
+  const accounts = $("#reputationAccounts");
+  if (!snapshot || !accounts) return;
+  snapshot.innerHTML = loaderHTML("Loading reputation accounts...", "Preparing VRI, BRI, and badge signals");
+  accounts.innerHTML = "";
+  try {
+    const data = await fetch("/api/reputation").then(r => r.json());
+    renderReputationHub(data);
+  } catch (e) {
+    snapshot.innerHTML = errorHTML(e.message);
+  }
+}
+
+function shortlistPayloadFromDraft() {
+  const d = collectDraftOverrides();
+  return {
+    category: d.category || "Information Technology",
+    subcategory: d.subcategory || "IT Infrastructure & Data Centers",
+    estimated_value_sar: d.estimated_value_sar || 1500000,
+    timeline_days: 90,
+    required_certifications: d.required_certifications || ["ISO 27001"],
+    minimum_years_experience: d.minimum_years_experience || 5,
+    minimum_similar_projects: d.minimum_similar_projects || 3,
+    local_presence_required: !!d.local_presence_required,
+    required_sector_license: d.required_sector_license || null,
+  };
+}
+
+async function runVendorShortlist() {
+  const box = $("#shortlistResult");
+  box.innerHTML = loaderHTML("Shortlisting vendors...", "Calculating VRI, requirement match, proposal quality, price, risk, and committee scores");
+  try {
+    const data = await fetch("/api/intelligence/shortlist", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(shortlistPayloadFromDraft()),
+    }).then(r => r.json());
+    box.innerHTML = renderShortlist(data);
+    box.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (e) {
+    box.innerHTML = errorHTML(e.message);
+  }
+}
+
+function renderShortlist(result) {
+  const counts = result.counts || {};
+  const reco = result.top_recommendation;
+  const committee = result.committee || {};
+  const topThree = result.top_three || [];
+  return `<div class="result">
+    <div class="intel-panel">
+      <div class="intel-hero">
+        <div>
+          <div class="intel-eyebrow">AI Vendor Selection Engine</div>
+          <h2>${esc(reco ? `${reco.fit_score}/100` : "No Match")}</h2>
+          <p>${esc(committee.final_recommendation || result.human_in_the_loop || "")}</p>
+        </div>
+        <span class="badge draft dot">Advisory - Buyer decides</span>
+      </div>
+      <div class="intel-grid">
+        ${metricCard("Potential Eligible Vendors", counts.potential_eligible_vendors_found ?? 0)}
+        ${metricCard("High Match Vendors", counts.high_match_vendors ?? 0)}
+        ${metricCard("Medium Match Vendors", counts.medium_match_vendors ?? 0)}
+        ${metricCard("Low Match Vendors", counts.low_match_vendors ?? 0)}
+        ${metricCard("Excluded Vendors", counts.excluded_vendors ?? 0)}
+        ${metricCard("Recommended Vendor", reco ? reco.vendor_name : "Manual review")}
+      </div>
+      ${renderCommitteeComparison(committee)}
+    </div>
+    <h3 style="margin:18px 0 10px">Top 3 Vendors</h3>
+    ${topThree.map(renderShortlistVendor).join("") || "<p class='empty'>No eligible vendors found.</p>"}
+    <h3 style="margin:24px 0 10px">Eligible Vendor Buckets</h3>
+    ${renderBucket("High Match", result.buckets?.high_match)}
+    ${renderBucket("Medium Match", result.buckets?.medium_match)}
+    ${renderBucket("Low Match", result.buckets?.low_match)}
+  </div>`;
+}
+
+function renderCommitteeComparison(committee) {
+  const rows = (committee.comparison || []).map(v => `<tr>
+    <td>#${esc(v.rank)} ${esc(v.vendor_name)}<span>VRI ${esc(v.vri)} - risk ${esc(v.risk_level)}</span></td>
+    <td><span class="committee-score">${esc(v.fit_score)}</span></td>
+    <td><span class="committee-score">${esc(v.committee_score)}</span></td>
+  </tr>`).join("");
+  if (!rows) return "";
+  return `<div class="intel-section">
+    <div class="intel-section-head"><h4>AI Tender Committee Comparison</h4><span>Technical 30 / Commercial 20 / Compliance 15 / Delivery 15 / Risk 10 / VRI 10</span></div>
+    <div class="committee-box"><table class="committee-table">
+      <thead><tr><th>Vendor</th><th>Fit Score</th><th>Committee</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+  </div>`;
+}
+
+function renderShortlistVendor(v) {
+  return `<div class="vendor-card">
+    <div class="vc-head">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="rank-pill ${v.rank === 1 ? "rank-1" : ""}">#${esc(v.rank)}</div>
+        <div>
+          <div class="vc-name">${esc(v.vendor_name)}</div>
+          <div class="hint" style="margin:0">VRI ${esc(v.vri)} - ${esc(v.vri_level)} - ${esc(v.badge)}</div>
+        </div>
+      </div>
+      <div class="score-big">${esc(v.fit_score)}</div>
+    </div>
+    <span class="badge ${riskBadgeClass(v.risk_level)} dot">risk: ${esc(v.risk_level)}</span>
+    <div class="bars">
+      ${barRow("Requirement match", v.requirement_match)}
+      ${barRow("Proposal quality", v.proposal_quality)}
+      ${barRow("Price competitiveness", v.price_competitiveness)}
+      ${barRow("Delivery reliability", v.delivery_reliability)}
+      ${barRow("AI committee", v.committee?.final_score)}
+    </div>
+    <div class="badge-row">${badgeList(v.special_badges)}</div>
+    ${ul(v.why_selected)}
+  </div>`;
+}
+
+function barRow(label, val) {
+  const n = Math.max(0, Math.min(100, Number(val) || 0));
+  return `<div class="bar-row"><span>${esc(label)}</span>
+    <div class="bar-track"><div class="bar-fill" style="width:${n}%"></div></div>
+    <span style="text-align:right">${n.toFixed(0)}</span></div>`;
+}
+
+function renderBucket(label, vendors) {
+  const rows = (vendors || []).slice(0, 8).map(v => `<div class="bucket-row">
+    <b>#${esc(v.rank)} ${esc(v.vendor_name)}</b>
+    <span>Fit ${esc(v.fit_score)} - VRI ${esc(v.vri)} - ${esc(v.risk_level)} risk</span>
+  </div>`).join("");
+  return `<div class="section-block">
+    <div class="sb-head"><span class="num">${esc(label[0])}</span>${esc(label)}</div>
+    <div class="sb-body">${rows || "<p class='empty'>No vendors in this bucket.</p>"}</div>
+  </div>`;
+}
+
+$("#refreshReputationBtn")?.addEventListener("click", loadReputationHub);
+$("#shortlistBtn")?.addEventListener("click", runVendorShortlist);
+
 $("#kbBtn").addEventListener("click", kbSearch);
 $("#kbQuery").addEventListener("keydown", e => { if (e.key === "Enter") kbSearch(); });
 async function kbSearch() {
@@ -1104,4 +1329,5 @@ async function kbSearch() {
   } catch (e) {
     console.warn("meta load failed", e);
   }
+  await loadReputationHub();
 })();
