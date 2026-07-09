@@ -117,6 +117,9 @@ body {
 }
 .field-label { display: block; font-size: 12.5px; font-weight: 700; color: var(--ink); margin-bottom: 7px; }
 .field-label .muted { font-weight: 400; color: var(--muted); }
+.field-label .req { color: var(--bad); font-weight: 800; margin-left: 4px; }
+.required-note { margin-top: 10px; font-size: 12.5px; color: var(--muted); }
+.required-note .req { color: var(--bad); font-weight: 800; }
 .row { display: flex; gap: 10px; align-items: stretch; min-width: 0; }
 .row.compact .input { min-width: 0; }
 .input {

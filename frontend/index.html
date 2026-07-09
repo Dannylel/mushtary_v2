@@ -101,82 +101,62 @@
       <section class="view" id="view-draft">
         <header class="page-head">
           <h1>Draft a Tender <span class="badge ok" style="vertical-align:middle">full pipeline</span></h1>
-          <p>Write or paste the Scope of Work, add the fixed tender facts Qwen should not guess, then generate the full 18-section RFP.</p>
+          <p>Complete the fields from Input Fields.docx. Deliverables and timeline may be left blank for Qwen to derive from the Scope of Work.</p>
         </header>
         <div class="panel">
           <details class="control-details" open>
             <summary>Basic tender details</summary>
+            <div class="required-note"><span class="req">*</span> Required fields from Input Fields.docx.</div>
             <div class="grid two" style="margin-top:14px">
-              <div><label class="field-label">Tender title</label><input id="draftTenderTitle" class="input" value="Data Center Infrastructure Upgrade" /></div>
-              <div><label class="field-label">Tender ID</label><input id="draftTenderId" class="input" value="TND-IT-001" /></div>
-              <div><label class="field-label">Buyer name</label><input id="draftBuyerName" class="input" value="Mushtary Test Buyer" /></div>
-              <div><label class="field-label">Location</label><input id="draftLocation" class="input" value="Riyadh, Saudi Arabia" /></div>
+              <div><label class="field-label">Tender title<span class="req">*</span></label><input id="draftTenderTitle" class="input" value="Data Center Infrastructure Upgrade" required /></div>
+              <div><label class="field-label">Tender ID<span class="req">*</span></label><input id="draftTenderId" class="input" value="TND-IT-001" required /></div>
+              <div><label class="field-label">Buyer name<span class="req">*</span></label><input id="draftBuyerName" class="input" value="Mushtary Test Buyer" required /></div>
+              <div><label class="field-label">Location<span class="req">*</span></label><input id="draftLocation" class="input" value="Riyadh, Saudi Arabia" required /></div>
+              <div><label class="field-label">Category<span class="req">*</span></label><select id="draftCategory" class="input" required></select></div>
+              <div><label class="field-label">Subcategory<span class="req">*</span></label><select id="draftSubcategory" class="input" required></select></div>
+              <div><label class="field-label">Tender type<span class="req">*</span></label><select id="draftTenderType" class="input" required><option>Request for Proposal (RFP)</option></select></div>
+              <div><label class="field-label">Procurement method<span class="req">*</span></label><select id="draftProcurementMethod" class="input" required><option>Invited Tender</option></select></div>
             </div>
-            <label class="field-label" style="margin-top:14px">Buyer description</label>
-            <textarea id="draftBuyerDescription" class="input textarea compact-textarea">Mushtary Test Buyer requires a qualified IT infrastructure vendor to upgrade its data center environment in Riyadh, Saudi Arabia.</textarea>
+            <label class="field-label" style="margin-top:14px">Buyer description<span class="req">*</span></label>
+            <textarea id="draftBuyerDescription" class="input textarea compact-textarea" required>Mushtary Test Buyer requires a qualified IT infrastructure vendor to upgrade its data center environment in Riyadh, Saudi Arabia.</textarea>
           </details>
           <details class="control-details" open>
-            <summary>Dates and tender facts</summary>
+            <summary>Dates and validity</summary>
+            <div class="required-note"><span class="req">*</span> Required fields from Input Fields.docx.</div>
             <div class="grid two" style="margin-top:14px">
-              <div>
-                <label class="field-label">Category</label>
-                <select id="draftCategory" class="input"></select>
-              </div>
-              <div>
-                <label class="field-label">Subcategory</label>
-                <select id="draftSubcategory" class="input"></select>
-              </div>
-              <div>
-                <label class="field-label">Tender type</label>
-                <select id="draftTenderType" class="input">
-                  <option>Request for Proposal (RFP)</option>
-                </select>
-              </div>
-              <div>
-                <label class="field-label">Procurement method</label>
-                <select id="draftProcurementMethod" class="input">
-                  <option>Invited Tender</option>
-                </select>
-              </div>
-              <div>
-                <label class="field-label">Issue date</label>
-                <input id="draftIssueDate" class="input" type="date" />
-              </div>
-              <div>
-                <label class="field-label">Submission deadline</label>
-                <div class="row compact">
-                  <input id="draftSubmissionDate" class="input" type="date" />
-                  <input id="draftSubmissionTime" class="input" type="time" value="11:00" />
-                </div>
-              </div>
-              <div>
-                <label class="field-label">Clarification deadline</label>
-                <input id="draftClarificationDate" class="input" type="date" />
-              </div>
-              <div>
-                <label class="field-label">Opening date</label>
-                <input id="draftOpeningDate" class="input" type="date" />
-              </div>
-              <div>
-                <label class="field-label">Proposal validity days</label>
-                <input id="draftProposalValidityDays" class="input" type="number" min="1" value="90" />
-              </div>
-              <div>
-                <label class="field-label">Evaluation split</label>
-                <select id="draftEvaluationModel" class="input">
-                  <option value="70/30">70% Technical / 30% Financial</option>
-                </select>
-              </div>
-              <div>
-                <label class="field-label">Minimum technical score</label>
-                <input id="draftMinimumScore" class="input" type="number" min="0" max="100" value="70" />
-              </div>
+              <div><label class="field-label">Issue date<span class="req">*</span></label><input id="draftIssueDate" class="input" type="date" required /></div>
+              <div><label class="field-label">Submission deadline<span class="req">*</span></label><div class="row compact"><input id="draftSubmissionDate" class="input" type="date" required /><input id="draftSubmissionTime" class="input" type="time" value="11:00" required /></div></div>
+              <div><label class="field-label">Clarification deadline<span class="req">*</span></label><input id="draftClarificationDate" class="input" type="date" required /></div>
+              <div><label class="field-label">Opening date<span class="req">*</span></label><input id="draftOpeningDate" class="input" type="date" required /></div>
+              <div><label class="field-label">Site visit date<span class="req">*</span></label><input id="draftSiteVisitDate" class="input" type="date" required /></div>
+              <div><label class="field-label">Proposal validity days<span class="req">*</span></label><input id="draftProposalValidityDays" class="input" type="number" min="1" value="90" required /></div>
+            </div>
+          </details>
+          <details class="control-details" open>
+            <summary>Commercial, platform, and contract controls</summary>
+            <div class="required-note"><span class="req">*</span> Required fields from Input Fields.docx.</div>
+            <div class="grid two" style="margin-top:14px">
+              <div><label class="field-label">Evaluation split<span class="req">*</span></label><select id="draftEvaluationModel" class="input" required><option value="70/30">70% Technical / 30% Financial</option></select></div>
+              <div><label class="field-label">Minimum technical score<span class="req">*</span></label><input id="draftMinimumScore" class="input" type="number" min="0" max="100" value="70" required /></div>
+              <div><label class="field-label">Project duration<span class="req">*</span></label><input id="draftContractDuration" class="input" value="90 days implementation + 3 years warranty/support" required /></div>
+              <div><label class="field-label">Warranty duration<span class="req">*</span></label><input id="draftWarrantyDuration" class="input" value="3 years" required /></div>
+              <div><label class="field-label">Bid security amount<span class="req">*</span></label><input id="draftBidSecurityAmount" class="input" value="2% of submitted bid value" required /></div>
+              <div><label class="field-label">Performance bond %<span class="req">*</span></label><input id="draftPerformanceBondPct" class="input" type="number" min="0" max="100" value="5" required /></div>
+              <div><label class="field-label">Performance bond validity<span class="req">*</span></label><input id="draftPerformanceBondValidity" class="input" value="the full implementation period and the 3-year warranty/support period" required /></div>
+              <div><label class="field-label">Retention %<span class="req">*</span></label><input id="draftRetentionPct" class="input" type="number" min="0" max="100" value="10" required /></div>
+              <div><label class="field-label">Liquidated damages rate<span class="req">*</span></label><input id="draftLiquidatedDamagesRate" class="input" value="0.5% of delayed milestone value per week, capped as per final contract" required /></div>
+              <div><label class="field-label">Proposal format<span class="req">*</span></label><select id="draftProposalFormat" class="input" required><option>Separate Technical Proposal and Commercial Proposal</option></select></div>
+              <div><label class="field-label">Submission method<span class="req">*</span></label><select id="draftSubmissionMethod" class="input" required><option>Mushtarry platform only</option></select></div>
+              <div><label class="field-label">Technical file format<span class="req">*</span></label><select id="draftTechnicalFileFormat" class="input" required><option>PDF</option></select></div>
+              <div><label class="field-label">Commercial file format<span class="req">*</span></label><select id="draftCommercialFileFormat" class="input" required><option>PDF/Excel</option></select></div>
+              <div><label class="field-label">Language requirements<span class="req">*</span></label><select id="draftLanguageRequirements" class="input" required><option>Arabic and English; Arabic takes precedence in case of conflict.</option></select></div>
+              <div><label class="field-label">Max file size MB<span class="req">*</span></label><input id="draftMaxFileSize" class="input" type="number" min="1" value="50" required /></div>
             </div>
             <div class="toggle-grid" style="margin-top:14px">
               <label><input id="draftSiteVisitRequired" type="checkbox" checked /> Site visit required</label>
               <label><input id="draftBidSecurityRequired" type="checkbox" checked /> Bid security required</label>
               <label><input id="draftPerformanceBondRequired" type="checkbox" checked /> Performance bond required</label>
-              <label><input id="draftLocalPresenceRequired" type="checkbox" /> Local presence required</label>
+              <label><input id="draftLocalPresenceRequired" type="checkbox" checked /> Local presence required</label>
               <label><input id="draftSaudizationRequired" type="checkbox" checked /> Saudization required</label>
               <label><input id="draftOnsiteRequired" type="checkbox" checked /> Onsite work required</label>
               <label><input id="draftSeparateTechCommercial" type="checkbox" checked /> Separate technical / commercial files</label>
@@ -190,126 +170,35 @@
               <label><input id="draftCompletenessCheck" type="checkbox" checked /> Completeness check required</label>
               <label><input id="draftTimestampOfficial" type="checkbox" checked /> Platform timestamp official</label>
             </div>
-            <div class="grid two" style="margin-top:14px">
-              <div>
-                <label class="field-label">Site visit date</label>
-                <input id="draftSiteVisitDate" class="input" type="date" />
-              </div>
-              <div>
-                <label class="field-label">Bid security amount</label>
-                <input id="draftBidSecurityAmount" class="input" value="2% of submitted bid value" />
-              </div>
-              <div>
-                <label class="field-label">Performance bond %</label>
-                <input id="draftPerformanceBondPct" class="input" type="number" min="0" max="100" value="5" />
-              </div>
-              <div>
-                <label class="field-label">Performance bond validity</label>
-                <input id="draftPerformanceBondValidity" class="input" value="the full implementation period and the 3-year warranty/support period" />
-              </div>
-              <div>
-                <label class="field-label">Retention %</label>
-                <input id="draftRetentionPct" class="input" type="number" min="0" max="100" value="10" />
-              </div>
-              <div>
-                <label class="field-label">Liquidated damages rate</label>
-                <input id="draftLiquidatedDamagesRate" class="input" value="0.5% of delayed milestone value per week, capped as per final contract" />
-              </div>
-              <div>
-                <label class="field-label">Contract duration</label>
-                <input id="draftContractDuration" class="input" value="90 days implementation + 3 years warranty/support" />
-              </div>
-              <div>
-                <label class="field-label">Warranty duration</label>
-                <input id="draftWarrantyDuration" class="input" value="3 years" />
-              </div>
-              <div>
-                <label class="field-label">Proposal format</label>
-                <select id="draftProposalFormat" class="input">
-                  <option>Separate Technical Proposal and Commercial Proposal</option>
-                </select>
-              </div>
-              <div>
-                <label class="field-label">Technical file format</label>
-                <select id="draftTechnicalFileFormat" class="input">
-                  <option>PDF</option>
-                </select>
-              </div>
-              <div>
-                <label class="field-label">Commercial file format</label>
-                <select id="draftCommercialFileFormat" class="input">
-                  <option>PDF/Excel</option>
-                </select>
-              </div>
-              <div>
-                <label class="field-label">Language requirements</label>
-                <select id="draftLanguageRequirements" class="input">
-                  <option>Arabic and English; Arabic takes precedence in case of conflict.</option>
-                </select>
-              </div>
-              <div>
-                <label class="field-label">Submission method</label>
-                <select id="draftSubmissionMethod" class="input">
-                  <option>Mushtarry platform only</option>
-                </select>
-              </div>
-              <div>
-                <label class="field-label">Max file size MB</label>
-                <input id="draftMaxFileSize" class="input" type="number" min="1" value="50" />
-              </div>
-            </div>
           </details>
           <details class="control-details" open>
             <summary>Project objective and scope inputs</summary>
-            <label class="field-label" style="margin-top:14px">Project objective</label>
-            <textarea id="draftProjectObjective" class="input textarea compact-textarea">Modernise the existing data center to improve performance, reliability, security posture, and compliance with applicable Saudi cybersecurity requirements.</textarea>
-            <label class="field-label" style="margin-top:14px">Scope of work</label>
-            <textarea id="draftScope" class="input textarea hero-textarea">Full supply, installation, configuration, testing, and commissioning of new server hardware, core network switches, next-generation firewall, and backup systems. The scope includes data migration, rollback planning, staff training, as-built documentation, and warranty/support services.</textarea>
-            <label class="field-label" style="margin-top:14px">Technical requirements</label>
-            <textarea id="draftTechnicalRequirements" class="input textarea compact-textarea">Servers: rack-mounted, dual-processor, minimum 256GB RAM, 20TB SSD RAID-6. Core switches: Layer 3, minimum 1Tbps switching capacity, redundant PSU. Firewall: NGFW with IPS, minimum 10Gbps throughput. Virtualisation: VMware vSphere or Microsoft Hyper-V. Backup: daily full backup, weekly offsite backup, Veeam-compatible.</textarea>
-            <label class="field-label" style="margin-top:14px">Methodology requirements</label>
-            <textarea id="draftMethodologyRequirements" class="input textarea compact-textarea">Vendor must provide implementation methodology, migration strategy, rollback plan, risk register, testing plan, and handover plan. All change windows require prior written approval.</textarea>
+            <div class="required-note"><span class="req">*</span> Scope of Work is required. Qwen can derive the rest of this section from it.</div>
+            <label class="field-label" style="margin-top:14px">Scope of work<span class="req">*</span></label>
+            <textarea id="draftScope" class="input textarea hero-textarea" required>Full supply, installation, configuration, testing, and commissioning of new server hardware, core network switches, next-generation firewall, and backup systems. The scope includes data migration, rollback planning, staff training, as-built documentation, and warranty/support services.</textarea>
+            <div class="toolbar" style="margin-top:14px">
+              <button id="reviewSowBtn" class="btn ghost">Evaluate / Rewrite SoW</button>
+            </div>
           </details>
-          <details class="control-details">
-            <summary>Deliverables, timeline, and responsibilities</summary>
-            <div class="hint" style="margin-top:14px">Use pipe separators. Deliverables: name | description | format. Timeline: milestone | date. Responsibilities: party | item; item.</div>
-            <label class="field-label" style="margin-top:14px">Deliverables</label>
-            <textarea id="draftDeliverables" class="input textarea compact-textarea">Infrastructure Assessment Report | Current state analysis and upgrade recommendations | PDF
-Proposed Solution Design | Target architecture, technical design, BOM, network/security design | PDF
-Upgraded Server Infrastructure | Rack-mounted servers installed and configured | System/Physical
-Network & Security Equipment | Core switches and NGFW installed and configured | System/Physical
-Data Migration Completion Report | Migration evidence, downtime confirmation, and zero-loss validation | PDF
-Training Materials | IT staff training in Arabic and English | PDF/PPTX
-As-Built Documentation | Network diagrams, configuration records, licenses, and warranty details | PDF</textarea>
-            <label class="field-label" style="margin-top:14px">Timeline milestones</label>
-            <textarea id="draftTimeline" class="input textarea compact-textarea">Infrastructure Assessment Report | Day 10 from contract award
-Assessment & Design Approval | Day 15 from contract award
-Equipment Delivery | Day 45 from contract award
-Installation & Configuration Complete | Day 75 from contract award
-Data Migration & UAT | Day 85 from contract award
-Project Handover | Day 90 from contract award</textarea>
-            <label class="field-label" style="margin-top:14px">Roles and responsibilities</label>
-            <textarea id="draftResponsibilities" class="input textarea compact-textarea">Buyer | Provide data center access and security clearance; Assign dedicated IT focal point; Review and approve designs, plans, and deliverables within agreed review windows; Conduct UAT and final sign-off
-Vendor | Supply all approved hardware and software; Execute installation, configuration, testing, and migration; Provide project manager and technical lead; Maintain applicable Saudi IT/cybersecurity compliance throughout; Provide warranty and post-implementation support</textarea>
-          </details>
-          <details class="control-details">
+          <details class="control-details" open>
             <summary>Commercial, legal, and eligibility inputs</summary>
+            <div class="required-note"><span class="req">*</span> Required procurement controls and eligibility facts.</div>
             <div class="grid two" style="margin-top:14px">
-              <div><label class="field-label">Estimated value SAR</label><input id="draftEstimatedValue" class="input" type="number" value="1500000" /></div>
-              <div><label class="field-label">Budget range</label><input id="draftBudgetRange" class="input" value="SAR 1,200,000 - 1,800,000" /></div>
-              <div><label class="field-label">Minimum years experience</label><input id="draftMinYears" class="input" type="number" value="5" /></div>
-              <div><label class="field-label">Minimum similar projects</label><input id="draftMinProjects" class="input" type="number" value="3" /></div>
-              <div><label class="field-label">Minimum project value SAR</label><input id="draftMinProjectValue" class="input" type="number" value="500000" /></div>
+              <div><label class="field-label">Estimated value SAR<span class="req">*</span></label><input id="draftEstimatedValue" class="input" type="number" value="1500000" required /></div>
+              <div><label class="field-label">Budget range<span class="req">*</span></label><input id="draftBudgetRange" class="input" value="SAR 1,200,000 - 1,800,000" required /></div>
+              <div><label class="field-label">Minimum years experience<span class="req">*</span></label><input id="draftMinYears" class="input" type="number" value="5" required /></div>
+              <div><label class="field-label">Minimum similar projects<span class="req">*</span></label><input id="draftMinProjects" class="input" type="number" value="3" required /></div>
+              <div><label class="field-label">Minimum project value SAR<span class="req">*</span></label><input id="draftMinProjectValue" class="input" type="number" value="500000" required /></div>
               <div>
-                <label class="field-label">Required sector license</label>
-                <select id="draftSectorLicense" class="input">
+                <label class="field-label">Required sector license<span class="req">*</span></label>
+                <select id="draftSectorLicense" class="input" required>
                   <option>CITC / CST License and CST / NCA compliance evidence where applicable</option>
                 </select>
               </div>
             </div>
-            <label class="field-label" style="margin-top:14px">Payment terms</label>
-            <textarea id="draftPaymentTerms" class="input textarea compact-textarea">Milestone-based: 20% on contract award, 40% on equipment delivery and acceptance, 30% on successful handover/UAT, and 10% after completion of the initial warranty observation period.</textarea>
-            <label class="field-label" style="margin-top:14px">Eligibility criteria</label>
+            <label class="field-label" style="margin-top:14px">Payment terms<span class="req">*</span></label>
+            <textarea id="draftPaymentTerms" class="input textarea compact-textarea" required>Milestone-based: 20% on contract award, 40% on equipment delivery and acceptance, 30% on successful handover/UAT, and 10% after completion of the initial warranty observation period.</textarea>
+            <label class="field-label" style="margin-top:14px">Eligibility criteria<span class="req">*</span></label>
             <div id="draftEligibilityCriteria" class="toggle-grid single" style="margin-top:10px">
               <label><input type="checkbox" value="Minimum 5 years of IT infrastructure project experience in KSA" checked /> Minimum 5 years of IT infrastructure project experience in KSA</label>
               <label><input type="checkbox" value="Minimum 3 completed similar projects with contract value exceeding SAR 500,000 each" checked /> Minimum 3 completed similar projects with contract value exceeding SAR 500,000 each</label>
@@ -317,18 +206,19 @@ Vendor | Supply all approved hardware and software; Execute installation, config
               <label><input type="checkbox" value="Must hold relevant CST/CITC/NCA-related license or provide applicability explanation" checked /> Must hold relevant CST/CITC/NCA-related license or provide applicability explanation</label>
               <label><input type="checkbox" value="Must maintain valid Saudi legal, tax, address, banking, and signatory documentation" checked /> Must maintain valid Saudi legal, tax, address, banking, and signatory documentation</label>
             </div>
-            <label class="field-label" style="margin-top:14px">Required certifications</label>
+            <label class="field-label" style="margin-top:14px">Required certifications<span class="req">*</span></label>
             <div id="draftCertifications" class="toggle-grid" style="margin-top:10px">
               <label><input type="checkbox" value="Relevant vendor certifications" checked /> Relevant vendor certifications</label>
               <label><input type="checkbox" value="ISO 27001 preferred" checked /> ISO 27001 preferred</label>
               <label><input type="checkbox" value="ISO 9001 preferred" checked /> ISO 9001 preferred</label>
             </div>
           </details>
-          <details class="control-details">
-            <summary>Document lists</summary>
+          <details class="control-details" open>
+            <summary>Required documents</summary>
+            <div class="required-note"><span class="req">*</span> Select the documents vendors must submit.</div>
             <div class="grid two" style="margin-top:14px">
               <div>
-                <label class="field-label">Mandatory documents</label>
+                <label class="field-label">Mandatory documents<span class="req">*</span></label>
                 <div id="draftMandatoryDocs" class="toggle-grid single" style="margin-top:10px">
                   <label><input type="checkbox" value="Commercial Registration (CR)" checked /> Commercial Registration (CR)</label>
                   <label><input type="checkbox" value="National Address Certificate" checked /> National Address Certificate</label>
@@ -338,7 +228,7 @@ Vendor | Supply all approved hardware and software; Execute installation, config
                 </div>
               </div>
               <div>
-                <label class="field-label">Conditional documents</label>
+                <label class="field-label">Conditional documents<span class="req">*</span></label>
                 <div id="draftConditionalDocs" class="toggle-grid single" style="margin-top:10px">
                   <label><input type="checkbox" value="Articles of Association (AOA)" checked /> Articles of Association (AOA)</label>
                   <label><input type="checkbox" value="VAT Registration Certificate" checked /> VAT Registration Certificate</label>
@@ -350,7 +240,7 @@ Vendor | Supply all approved hardware and software; Execute installation, config
                 </div>
               </div>
               <div>
-                <label class="field-label">Sector-specific documents</label>
+                <label class="field-label">Sector-specific documents<span class="req">*</span></label>
                 <div id="draftSectorDocs" class="toggle-grid single" style="margin-top:10px">
                   <label><input type="checkbox" value="CITC / CST License" checked /> CITC / CST License</label>
                   <label><input type="checkbox" value="CST / NCA License or Compliance Evidence" checked /> CST / NCA License or Compliance Evidence</label>
@@ -371,13 +261,10 @@ Vendor | Supply all approved hardware and software; Execute installation, config
               </div>
             </div>
           </details>
-          <details class="control-details">
-            <summary>Evaluation inputs</summary>
-            <div class="hint" style="margin-top:14px">Evaluation criteria use: name | weight | description. Other lists use one item per line.</div>
-            <label class="field-label" style="margin-top:14px">Evaluation criteria</label>
-            <textarea id="draftEvaluationCriteria" class="input textarea compact-textarea">Technical Proposal | 70 | Technical parameters generated by LegalEvalSectionAgent.
-Financial Proposal | 30 | Financial parameters generated by LegalEvalSectionAgent.</textarea>
-            <label class="field-label" style="margin-top:14px">Mandatory disqualification criteria</label>
+          <details class="control-details" open>
+            <summary>Required evaluation controls</summary>
+            <div class="required-note"><span class="req">*</span> Required disqualification rules. Evaluation criteria and parameters are generated from the project and SoW.</div>
+            <label class="field-label" style="margin-top:14px">Mandatory disqualification criteria<span class="req">*</span></label>
             <div id="draftDisqualificationCriteria" class="toggle-grid single" style="margin-top:10px">
               <label><input type="checkbox" value="Late submission after official platform deadline" checked /> Late submission after official platform deadline</label>
               <label><input type="checkbox" value="Failure to submit mandatory legal registration documents" checked /> Failure to submit mandatory legal registration documents</label>
@@ -387,9 +274,27 @@ Financial Proposal | 30 | Financial parameters generated by LegalEvalSectionAgen
               <label><input type="checkbox" value="Conflict of interest not disclosed" checked /> Conflict of interest not disclosed</label>
               <label><input type="checkbox" value="Vendor is blacklisted, suspended, or legally restricted" checked /> Vendor is blacklisted, suspended, or legally restricted</label>
             </div>
+          </details>
+          <details class="control-details">
+            <summary>Optional AI-derived writing overrides</summary>
+            <div class="hint" style="margin-top:14px">Leave blank for Qwen to derive from the SoW and project details. Fill only when the buyer wants to lock exact wording or items.</div>
+            <label class="field-label" style="margin-top:14px">Project objective</label>
+            <textarea id="draftProjectObjective" class="input textarea compact-textarea" placeholder="Optional. Qwen can derive from the SoW."></textarea>
+            <label class="field-label" style="margin-top:14px">Technical requirements</label>
+            <textarea id="draftTechnicalRequirements" class="input textarea compact-textarea" placeholder="Optional. Qwen can derive from the SoW."></textarea>
+            <label class="field-label" style="margin-top:14px">Methodology requirements</label>
+            <textarea id="draftMethodologyRequirements" class="input textarea compact-textarea" placeholder="Optional. Qwen can derive from the SoW."></textarea>
+            <label class="field-label" style="margin-top:14px">Deliverables</label>
+            <textarea id="draftDeliverables" class="input textarea compact-textarea" placeholder="Optional. Example: Deliverable name | Description | PDF"></textarea>
+            <label class="field-label" style="margin-top:14px">Timeline milestones</label>
+            <textarea id="draftTimeline" class="input textarea compact-textarea" placeholder="Optional. Example: Kickoff | Within 5 business days from award"></textarea>
+            <label class="field-label" style="margin-top:14px">Roles and responsibilities</label>
+            <textarea id="draftResponsibilities" class="input textarea compact-textarea" placeholder="Optional. Example: Buyer | Provide access; Review deliverables"></textarea>
+            <label class="field-label" style="margin-top:14px">Evaluation criteria</label>
+            <textarea id="draftEvaluationCriteria" class="input textarea compact-textarea" placeholder="Optional. Qwen can derive from the SoW and project."></textarea>
             <div class="grid two" style="margin-top:14px">
-              <div><label class="field-label">Technical evaluation parameters</label><textarea id="draftTechnicalEvalParams" class="input textarea mini-textarea"></textarea></div>
-              <div><label class="field-label">Financial evaluation parameters</label><textarea id="draftFinancialEvalParams" class="input textarea mini-textarea"></textarea></div>
+              <div><label class="field-label">Technical evaluation parameters</label><textarea id="draftTechnicalEvalParams" class="input textarea mini-textarea" placeholder="Optional. Qwen can derive from the SoW."></textarea></div>
+              <div><label class="field-label">Financial evaluation parameters</label><textarea id="draftFinancialEvalParams" class="input textarea mini-textarea" placeholder="Optional. Qwen can derive from the SoW."></textarea></div>
             </div>
           </details>
         </div>
@@ -400,8 +305,8 @@ Financial Proposal | 30 | Financial parameters generated by LegalEvalSectionAgen
             </div>
             <span class="badge ok">only mode</span>
           </div>
+          <p class="hint">SOW is the required writing input. Optional writing sections at the bottom are derived by Qwen when left blank.</p>
           <div class="toolbar" style="margin-top:14px">
-            <button id="reviewSowBtn" class="btn ghost">Evaluate / Rewrite SoW</button>
             <button id="guidedDraftBtn" class="btn primary">Generate Tender From Approved SoW</button>
           </div>
         </div>

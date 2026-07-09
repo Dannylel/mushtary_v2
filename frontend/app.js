@@ -86,7 +86,7 @@ function evaluationWeights(model) {
 function collectDraftOverrides() {
   const evaluation_model = value("#draftEvaluationModel") || "70/30";
   const [technical_weight, financial_weight] = evaluationWeights(evaluation_model);
-  return {
+  const overrides = {
     tender_title: value("#draftTenderTitle") || undefined,
     tender_id: value("#draftTenderId") || undefined,
     buyer_name: value("#draftBuyerName") || undefined,
@@ -172,6 +172,93 @@ function collectDraftOverrides() {
       commercial_file_format: value("#draftCommercialFileFormat") || undefined,
     },
   };
+
+  [
+    "project_objective",
+    "technical_requirements",
+    "methodology_requirements",
+  ].forEach(field => {
+    if (!overrides[field]) {
+      delete overrides[field];
+    }
+  });
+
+  [
+    "deliverables",
+    "timeline",
+    "roles_and_responsibilities",
+    "evaluation_criteria",
+    "technical_evaluation_parameters",
+    "financial_evaluation_parameters",
+  ].forEach(field => {
+    if (Array.isArray(overrides[field]) && overrides[field].length === 0) {
+      delete overrides[field];
+    }
+  });
+
+  return overrides;
+}
+
+function missingRequiredDraftFields() {
+  const missing = [
+    ["#draftTenderTitle", "Tender title"],
+    ["#draftTenderId", "Tender ID"],
+    ["#draftBuyerName", "Buyer name"],
+    ["#draftBuyerDescription", "Buyer description"],
+    ["#draftCategory", "Category"],
+    ["#draftSubcategory", "Subcategory"],
+    ["#draftTenderType", "Tender type"],
+    ["#draftProcurementMethod", "Procurement method"],
+    ["#draftLocation", "Location"],
+    ["#draftIssueDate", "Issue date"],
+    ["#draftSiteVisitDate", "Site visit date"],
+    ["#draftSubmissionDate", "Submission deadline date"],
+    ["#draftSubmissionTime", "Submission deadline time"],
+    ["#draftClarificationDate", "Clarification deadline"],
+    ["#draftOpeningDate", "Opening date"],
+    ["#draftProposalValidityDays", "Proposal validity days"],
+    ["#draftEvaluationModel", "Evaluation split"],
+    ["#draftMinimumScore", "Minimum technical score"],
+    ["#draftContractDuration", "Project duration"],
+    ["#draftWarrantyDuration", "Warranty duration"],
+    ["#draftScope", "Scope of work"],
+    ["#draftPaymentTerms", "Payment terms"],
+    ["#draftBidSecurityAmount", "Bid security amount"],
+    ["#draftPerformanceBondPct", "Performance bond percentage"],
+    ["#draftPerformanceBondValidity", "Performance bond validity"],
+    ["#draftRetentionPct", "Retention percentage"],
+    ["#draftLiquidatedDamagesRate", "Liquidated damages rate"],
+    ["#draftProposalFormat", "Proposal format"],
+    ["#draftSubmissionMethod", "Submission method"],
+    ["#draftTechnicalFileFormat", "Technical file format"],
+    ["#draftCommercialFileFormat", "Commercial file format"],
+    ["#draftLanguageRequirements", "Language requirements"],
+    ["#draftMaxFileSize", "Max file size"],
+  ].filter(([id]) => !value(id)).map(([, label]) => label);
+
+  [
+    ["#draftEstimatedValue", "Estimated value"],
+    ["#draftBudgetRange", "Budget range"],
+    ["#draftMinYears", "Minimum years experience"],
+    ["#draftMinProjects", "Minimum similar projects"],
+    ["#draftMinProjectValue", "Minimum project value"],
+    ["#draftSectorLicense", "Required sector license"],
+  ].forEach(([id, label]) => {
+    if (!value(id)) missing.push(label);
+  });
+
+  [
+    ["#draftEligibilityCriteria input[type='checkbox']", "Eligibility criteria"],
+    ["#draftCertifications input[type='checkbox']", "Required certifications"],
+    ["#draftMandatoryDocs input[type='checkbox']", "Mandatory documents"],
+    ["#draftConditionalDocs input[type='checkbox']", "Conditional documents"],
+    ["#draftSectorDocs input[type='checkbox']", "Sector-specific documents"],
+    ["#draftDisqualificationCriteria input[type='checkbox']", "Mandatory disqualification criteria"],
+  ].forEach(([selector, label]) => {
+    if (!checkedLabels(selector).length) missing.push(label);
+  });
+
+  return missing;
 }
 
 function isoDatePlus(days) {
@@ -182,11 +269,11 @@ function isoDatePlus(days) {
 
 function setDefaultDraftDates() {
   const defaults = [
-    ["#draftIssueDate", "2026-06-02"],
-    ["#draftSiteVisitDate", "2026-06-08"],
-    ["#draftClarificationDate", "2026-06-12"],
-    ["#draftSubmissionDate", "2026-06-30"],
-    ["#draftOpeningDate", "2026-06-30"],
+    ["#draftIssueDate", isoDatePlus(0)],
+    ["#draftSiteVisitDate", isoDatePlus(6)],
+    ["#draftClarificationDate", isoDatePlus(10)],
+    ["#draftSubmissionDate", isoDatePlus(28)],
+    ["#draftOpeningDate", isoDatePlus(28)],
   ];
   defaults.forEach(([id, date]) => {
     const el = $(id);
@@ -850,7 +937,7 @@ function renderSowReview(result) {
 }
 
 $("#reviewSowBtn").addEventListener("click", () => {
-  const project_name = $("#draftTenderTitle").value.trim();
+  const project_name = $("#draftTenderTitle").value.trim() || "Guided Tender";
   const scope_text = $("#draftScope").value.trim();
   if (!scope_text) {
     $("#sowReviewResult").innerHTML = errorHTML("Write the scope of work first.");
@@ -879,8 +966,9 @@ $("#guidedDraftBtn").addEventListener("click", () => {
   const scope_text = $("#draftScope").value.trim();
   const template = selectedPdfTemplate();
   const form_overrides = collectDraftOverrides();
-  if (!project_name || !scope_text) {
-    $("#draftResult").innerHTML = errorHTML("Add both the project name and scope of work first.");
+  const missing = missingRequiredDraftFields();
+  if (missing.length) {
+    $("#draftResult").innerHTML = errorHTML(`Complete required fields first: ${missing.join(", ")}.`);
     return;
   }
   runJob({
