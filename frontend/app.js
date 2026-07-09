@@ -768,6 +768,7 @@ function renderDraft(result) {
 
   // 17. Annexures + 18. Approval
   sections.push(block(17, "Annexures", ul(o.annexures)));
+  setTimeout(() => loadDraftVendorRecommendations(form), 0);
   sections.push(block(18, "Buyer Approval",
     para("PENDING BUYER APPROVAL — this tender cannot be published until reviewed and approved by the authorized Buyer-Admin.")));
 
@@ -784,11 +785,47 @@ function renderDraft(result) {
       ${PDF_TEMPLATES.filter(([v]) => v !== activeTemplate).map(([v, label]) => `<a class="btn ghost" href="/api/download/${fid}/pdf?template=${encodeURIComponent(v)}" target="_blank">⬇ ${esc(label)}</a>`).join("")}
       <a class="btn ghost" href="/api/download/${fid}/json" target="_blank">⬇ JSON</a>` : ""}
     </div>
+    <div id="draftVendorRecommendations" class="section-block">
+      <div class="sb-head"><span class="num">V</span>Recommended Vendors</div>
+      <div class="sb-body">${loaderHTML("Finding eligible vendors...", "Calculating VRI, BRI context, AI ranking, risk score, probability of success, and committee signals")}</div>
+    </div>
     ${sections.join("")}
   </div>`;
 }
 
 // ── EXTRACT (and full pipeline from SOW) ─────────────────────────────────────────
+function shortlistPayloadFromForm(form) {
+  const certs = (form.required_certifications || [])
+    .map(x => typeof x === "string" ? x : (x.name || ""))
+    .filter(Boolean);
+  return {
+    category: form.category || "Information Technology",
+    subcategory: form.subcategory || "IT Infrastructure & Data Centers",
+    estimated_value_sar: form.estimated_value_sar || 1500000,
+    timeline_days: Number(String(form.contract_duration || "").match(/\d+/)?.[0]) || 90,
+    required_certifications: certs.length ? certs : ["ISO 27001"],
+    minimum_years_experience: form.minimum_years_experience || 5,
+    minimum_similar_projects: form.minimum_similar_projects || 3,
+    local_presence_required: !!form.local_presence_required,
+    required_sector_license: form.required_sector_license || null,
+  };
+}
+
+async function loadDraftVendorRecommendations(form) {
+  const box = $("#draftVendorRecommendations .sb-body");
+  if (!box) return;
+  try {
+    const data = await fetch("/api/intelligence/shortlist", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(shortlistPayloadFromForm(form || {})),
+    }).then(r => r.json());
+    box.innerHTML = renderShortlist(data);
+  } catch (e) {
+    box.innerHTML = errorHTML(e.message);
+  }
+}
+
 function renderSowReview(result) {
   const r = (result && result.review) || {};
   const badge = r.readiness === "ready" ? "ok" : r.readiness === "weak" ? "bad" : "warn";
@@ -1124,12 +1161,12 @@ function renderBuyerAccountTable(buyers) {
   const rows = buyers.map(b => `<tr>
     <td><b>${esc(b.name)}</b><span>${esc(b.account_id)} - ${esc(b.city)}</span></td>
     <td>${esc(b.primary_category)}<span>${esc(b.primary_subcategory)}</span></td>
-    <td><b>${esc(b.bri.overall)}</b><span>${esc(b.bri.level)}</span></td>
+    <td><b>${esc(b.buyer_score ?? b.bri.overall)}/100</b><span>${esc(b.bri.level)}</span></td>
     <td><span class="badge ${scoreBadgeClass(b.bri.overall)}">${esc(b.badge)}</span><span>${badgeList(b.special_badges)}</span></td>
-    <td>${esc(b.payment_reliability)}%<span>${esc(b.dispute_rate)}% dispute rate</span></td>
+    <td>${esc(b.payment_reliability)}%<span>Dispute Rate: ${esc(b.dispute_rate_level || b.dispute_rate)}</span></td>
   </tr>`).join("");
   return `<div class="rep-table-wrap"><table class="rep-table">
-    <thead><tr><th>Buyer</th><th>Category</th><th>BRI</th><th>Badge</th><th>Payment</th></tr></thead>
+    <thead><tr><th>Buyer</th><th>Category</th><th>Buyer Score</th><th>Badge</th><th>Payment Reliability</th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
 }
@@ -1183,24 +1220,37 @@ function renderShortlist(result) {
   const counts = result.counts || {};
   const reco = result.top_recommendation;
   const committee = result.committee || {};
+  const layer = result.ai_recommendation_layer || {};
+  const weights = layer.weights || {};
   const topThree = result.top_three || [];
+
   return `<div class="result">
     <div class="intel-panel">
       <div class="intel-hero">
         <div>
           <div class="intel-eyebrow">AI Vendor Selection Engine</div>
-          <h2>${esc(reco ? `${reco.fit_score}/100` : "No Match")}</h2>
+          <h2>${esc(reco ? `${reco.ai_recommendation_score}/100` : "No Match")}</h2>
           <p>${esc(committee.final_recommendation || result.human_in_the_loop || "")}</p>
         </div>
         <span class="badge draft dot">Advisory - Buyer decides</span>
       </div>
       <div class="intel-grid">
-        ${metricCard("Potential Eligible Vendors", counts.potential_eligible_vendors_found ?? 0)}
+        ${metricCard("AI Recommendation Enabled", layer.enabled ? "YES" : "NO")}
+        ${metricCard("VRI Weight", `${weights.vri ?? 20}%`, "Vendor reputation signal")}
+        ${metricCard("Technical Evaluation", `${weights.technical_evaluation ?? 50}%`, "Fit and proposal quality")}
+        ${metricCard("Financial Evaluation", `${weights.financial_evaluation ?? 20}%`, "Value for money")}
+        ${metricCard("Risk Assessment", `${weights.risk_assessment ?? 10}%`, "Risk score")}
+        ${metricCard("Risk Score", layer.risk_score ?? "-")}
+        ${metricCard("Probability of Success", layer.probability_of_success != null ? `${layer.probability_of_success}%` : "-")}
+        ${metricCard("Compliance Status", layer.compliance_status || "-")}
+        ${metricCard("Recommended Vendor", reco ? reco.vendor_name : "Manual review")}
+      </div>
+      <div class="intel-grid">
+        ${metricCard("Potential Eligible Vendors Found", counts.potential_eligible_vendors_found ?? 0)}
         ${metricCard("High Match Vendors", counts.high_match_vendors ?? 0)}
         ${metricCard("Medium Match Vendors", counts.medium_match_vendors ?? 0)}
         ${metricCard("Low Match Vendors", counts.low_match_vendors ?? 0)}
         ${metricCard("Excluded Vendors", counts.excluded_vendors ?? 0)}
-        ${metricCard("Recommended Vendor", reco ? reco.vendor_name : "Manual review")}
       </div>
       ${renderCommitteeComparison(committee)}
     </div>
@@ -1216,14 +1266,14 @@ function renderShortlist(result) {
 function renderCommitteeComparison(committee) {
   const rows = (committee.comparison || []).map(v => `<tr>
     <td>#${esc(v.rank)} ${esc(v.vendor_name)}<span>VRI ${esc(v.vri)} - risk ${esc(v.risk_level)}</span></td>
-    <td><span class="committee-score">${esc(v.fit_score)}</span></td>
+    <td><span class="committee-score">${esc(v.ai_recommendation_score ?? v.fit_score)}</span></td>
     <td><span class="committee-score">${esc(v.committee_score)}</span></td>
   </tr>`).join("");
   if (!rows) return "";
   return `<div class="intel-section">
-    <div class="intel-section-head"><h4>AI Tender Committee Comparison</h4><span>Technical 30 / Commercial 20 / Compliance 15 / Delivery 15 / Risk 10 / VRI 10</span></div>
+    <div class="intel-section-head"><h4>AI Tender Committee Comparison</h4><span>Technical Agent / Commercial Agent / Compliance Agent / Delivery Agent / Risk Agent</span></div>
     <div class="committee-box"><table class="committee-table">
-      <thead><tr><th>Vendor</th><th>Fit Score</th><th>Committee</th></tr></thead>
+      <thead><tr><th>Vendor</th><th>AI Ranking</th><th>Committee</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
   </div>`;
@@ -1239,16 +1289,21 @@ function renderShortlistVendor(v) {
           <div class="hint" style="margin:0">VRI ${esc(v.vri)} - ${esc(v.vri_level)} - ${esc(v.badge)}</div>
         </div>
       </div>
-      <div class="score-big">${esc(v.fit_score)}</div>
+      <div class="score-big">${esc(v.ai_recommendation_score)}</div>
     </div>
     <span class="badge ${riskBadgeClass(v.risk_level)} dot">risk: ${esc(v.risk_level)}</span>
     <div class="bars">
-      ${barRow("Requirement match", v.requirement_match)}
-      ${barRow("Proposal quality", v.proposal_quality)}
-      ${barRow("Price competitiveness", v.price_competitiveness)}
-      ${barRow("Delivery reliability", v.delivery_reliability)}
-      ${barRow("AI committee", v.committee?.final_score)}
+      ${barRow("Technical Evaluation (50%)", v.technical_evaluation)}
+      ${barRow("Financial Evaluation (20%)", v.financial_evaluation)}
+      ${barRow("VRI (20%)", v.vri)}
+      ${barRow("Risk Assessment (10%)", v.risk_score)}
+      ${barRow("AI Tender Committee", v.committee?.final_score)}
     </div>
+    <dl class="kv" style="margin-top:12px">
+      <dt>Probability of Success</dt><dd>${esc(v.probability_of_success)}%</dd>
+      <dt>Compliance Status</dt><dd>${esc(v.compliance_status)}</dd>
+      <dt>Vendor Fit Score</dt><dd>${esc(v.fit_score)}/100</dd>
+    </dl>
     <div class="badge-row">${badgeList(v.special_badges)}</div>
     ${ul(v.why_selected)}
   </div>`;
@@ -1264,7 +1319,7 @@ function barRow(label, val) {
 function renderBucket(label, vendors) {
   const rows = (vendors || []).slice(0, 8).map(v => `<div class="bucket-row">
     <b>#${esc(v.rank)} ${esc(v.vendor_name)}</b>
-    <span>Fit ${esc(v.fit_score)} - VRI ${esc(v.vri)} - ${esc(v.risk_level)} risk</span>
+    <span>AI ${esc(v.ai_recommendation_score)} - VRI ${esc(v.vri)} - ${esc(v.risk_level)} risk</span>
   </div>`).join("");
   return `<div class="section-block">
     <div class="sb-head"><span class="num">${esc(label[0])}</span>${esc(label)}</div>

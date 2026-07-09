@@ -146,6 +146,26 @@ def _buyer_badge(rating: float, annual_spend: int, payment_reliability: float) -
     return "Under Observation"
 
 
+def _dispute_rate_level(rate: float) -> str:
+    if rate <= 2.5:
+        return "Low"
+    if rate <= 5:
+        return "Medium"
+    return "High"
+
+
+def _buyer_reliability_level(score: float) -> str:
+    if score >= 85:
+        return "Strategic Buyer"
+    if score >= 75:
+        return "Trusted Buyer"
+    if score >= 65:
+        return "Verified Buyer"
+    if score >= 50:
+        return "Developing Buyer"
+    return "Under Observation"
+
+
 def _trust_level_from_rating(rating: float, role: str) -> str:
     suffix = "Vendor" if role == "vendor" else "Buyer"
     if rating >= 4.6:
@@ -318,11 +338,13 @@ def _base_buyer(index: int) -> dict[str, Any]:
         "average_payment_days": max(12, int(48 - payment / 3)),
         "dispute_rate": round(max(0.2, 7.8 - dispute_behavior / 15 + (index % 2) * 0.7), 1),
         "rating": rating,
+        "buyer_score": bri,
         "bri": {
             "overall": bri,
-            "level": _trust_level_from_rating(rating, "buyer"),
+            "level": _buyer_reliability_level(bri),
             "components": components,
         },
+        "dispute_rate_level": _dispute_rate_level(round(max(0.2, 7.8 - dispute_behavior / 15 + (index % 2) * 0.7), 1)),
         "badge": _buyer_badge(rating, annual_spend, payment),
         "special_badges": _buyer_special_badges(index, payment, fairness),
         "profile_summary": (
@@ -427,7 +449,7 @@ def shortlist_vendors(raw: dict[str, Any] | None = None) -> dict[str, Any]:
             continue
         eligible.append(_score_vendor_for_tender(vendor, req))
 
-    eligible.sort(key=lambda item: item["fit_score"], reverse=True)
+    eligible.sort(key=lambda item: item["ai_recommendation_score"], reverse=True)
     for rank, vendor in enumerate(eligible, start=1):
         vendor["rank"] = rank
     buckets = {
@@ -457,6 +479,7 @@ def shortlist_vendors(raw: dict[str, Any] | None = None) -> dict[str, Any]:
         "top_three": top_three,
         "buckets": buckets,
         "excluded": excluded,
+        "ai_recommendation_layer": _ai_recommendation_layer(top_three),
         "committee": _committee_summary(top_three),
         "human_in_the_loop": "AI recommends only. Buyer approval is required before any award.",
     }
@@ -519,6 +542,14 @@ def _score_vendor_for_tender(vendor: dict[str, Any], req: ShortlistRequest) -> d
     price_score = _price_competitiveness(vendor, req)
     risk_adjustment = _risk_adjustment(vendor, price_score)
     vri = vendor["vri"]["category_specific"]
+    risk_score = _risk_score(vendor, risk_adjustment)
+    technical_evaluation = _round(requirement_match * 0.75 + proposal_quality * 0.25)
+    ai_recommendation_score = _round(
+        technical_evaluation * 0.50
+        + price_score * 0.20
+        + vri * 0.20
+        + risk_score * 0.10
+    )
     fit_score = _round(
         vri * 0.40
         + requirement_match * 0.30
@@ -536,6 +567,12 @@ def _score_vendor_for_tender(vendor: dict[str, Any], req: ShortlistRequest) -> d
         "vri_level": vendor["vri"]["level"],
         "rating": vendor["rating"],
         "fit_score": fit_score,
+        "ai_recommendation_score": ai_recommendation_score,
+        "technical_evaluation": technical_evaluation,
+        "financial_evaluation": price_score,
+        "risk_score": risk_score,
+        "probability_of_success": _probability_of_success(ai_recommendation_score, risk_score),
+        "compliance_status": _compliance_status(vendor["vri"]["components"]["compliance_and_licenses"]),
         "risk_level": _risk_level(fit_score, risk_adjustment),
         "delivery_reliability": vendor["delivery_reliability"],
         "price_competitiveness": price_score,
@@ -599,6 +636,22 @@ def _risk_adjustment(vendor: dict[str, Any], price_score: float) -> float:
     return max(-15, penalty)
 
 
+def _risk_score(vendor: dict[str, Any], risk_adjustment: float) -> float:
+    return _round(100 + risk_adjustment * 4 - vendor["dispute_rate"] * 2)
+
+
+def _probability_of_success(ai_recommendation_score: float, risk_score: float) -> int:
+    return round(_clamp(ai_recommendation_score * 0.72 + risk_score * 0.28))
+
+
+def _compliance_status(compliance_score: float) -> str:
+    if compliance_score >= 85:
+        return "Likely Compliant"
+    if compliance_score >= 70:
+        return "Buyer Review Required"
+    return "Compliance Risk"
+
+
 def _risk_level(fit_score: float, risk_adjustment: float) -> str:
     if fit_score >= 78 and risk_adjustment >= -3:
         return "Low"
@@ -618,25 +671,22 @@ def _vendor_committee(
     commercial = _round(price_score)
     compliance = _round(vendor["vri"]["components"]["compliance_and_licenses"])
     delivery = _round(vendor["delivery_reliability"])
-    risk = _round(100 + risk_adjustment * 4 - vendor["dispute_rate"] * 2)
-    vri = vendor["vri"]["category_specific"]
+    risk = _risk_score(vendor, risk_adjustment)
     final = _round(
         technical * 0.30
         + commercial * 0.20
-        + compliance * 0.15
+        + compliance * 0.20
         + delivery * 0.15
-        + risk * 0.10
-        + vri * 0.10
+        + risk * 0.15
     )
     return {
         "final_score": final,
         "weights": {
             "technical": 30,
             "commercial": 20,
-            "compliance": 15,
+            "compliance": 20,
             "delivery": 15,
-            "risk": 10,
-            "vri": 10,
+            "risk": 15,
         },
         "agents": [
             {"agent": "Technical Agent", "score": technical, "summary": "Category, experience, certification, and requirement alignment."},
@@ -644,7 +694,6 @@ def _vendor_committee(
             {"agent": "Compliance Agent", "score": compliance, "summary": "Licenses, documents, and verification strength."},
             {"agent": "Delivery Agent", "score": delivery, "summary": "Historical delivery reliability and on-time performance."},
             {"agent": "Risk Agent", "score": risk, "summary": "Disputes, abnormal pricing, profile status, and behavioral signals."},
-            {"agent": "VRI Signal", "score": vri, "summary": "Category-specific Vendor Reputation Index."},
         ],
     }
 
@@ -662,6 +711,38 @@ def _why_selected(vendor: dict[str, Any], req: ShortlistRequest, fit_score: floa
     if fit_score >= 80:
         reasons.append("Recommended as a high-match vendor; buyer approval remains required.")
     return reasons
+
+
+def _ai_recommendation_layer(top_three: list[dict[str, Any]]) -> dict[str, Any]:
+    if not top_three:
+        return {
+            "enabled": True,
+            "weights": {"technical_evaluation": 50, "financial_evaluation": 20, "vri": 20, "risk_assessment": 10},
+            "recommended_vendor_ranking": [],
+            "risk_score": None,
+            "probability_of_success": None,
+            "compliance_status": "No eligible vendor",
+        }
+    best = top_three[0]
+    return {
+        "enabled": True,
+        "weights": {"technical_evaluation": 50, "financial_evaluation": 20, "vri": 20, "risk_assessment": 10},
+        "recommended_vendor_ranking": [
+            {
+                "rank": vendor["rank"],
+                "vendor_name": vendor["vendor_name"],
+                "ai_recommendation_score": vendor["ai_recommendation_score"],
+                "vri": vendor["vri"],
+                "risk_score": vendor["risk_score"],
+                "probability_of_success": vendor["probability_of_success"],
+                "compliance_status": vendor["compliance_status"],
+            }
+            for vendor in top_three
+        ],
+        "risk_score": best["risk_score"],
+        "probability_of_success": best["probability_of_success"],
+        "compliance_status": best["compliance_status"],
+    }
 
 
 def _committee_summary(top_three: list[dict[str, Any]]) -> dict[str, Any]:
@@ -686,6 +767,7 @@ def _committee_summary(top_three: list[dict[str, Any]]) -> dict[str, Any]:
                 "rank": vendor["rank"],
                 "vendor_name": vendor["vendor_name"],
                 "fit_score": vendor["fit_score"],
+                "ai_recommendation_score": vendor["ai_recommendation_score"],
                 "committee_score": vendor["committee"]["final_score"],
                 "vri": vendor["vri"],
                 "risk_level": vendor["risk_level"],
