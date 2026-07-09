@@ -9,6 +9,18 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 </head>
 <body>
+  <div class="signin-gate" id="signinGate">
+    <div class="signin-panel">
+      <div class="brand-mark">M</div>
+      <h1>Mushtary Demo Sign In</h1>
+      <p>Choose a role. The demo signs you into one random account from the 30 buyer or 30 vendor profiles.</p>
+      <div class="signin-actions">
+        <button class="btn primary" id="signinBuyerBtn">Continue as Random Buyer</button>
+        <button class="btn ghost" id="signinVendorBtn">Continue as Random Vendor</button>
+      </div>
+      <div class="hint">No email, password, or real user data. This is only for testing buyer and vendor behavior.</div>
+    </div>
+  </div>
   <div class="app">
     <!-- Sidebar -->
     <aside class="sidebar">
@@ -26,11 +38,19 @@
         <button class="nav-item" data-view="extract"><span class="ico">⬆</span> Extract from PDF</button>
         <button class="nav-item" data-view="validate"><span class="ico">✓</span> Vendor Validation</button>
         <button class="nav-item" data-view="evaluate"><span class="ico">★</span> Evaluate &amp; Rank</button>
+        <button class="nav-item" data-view="vendor-feed" data-role-view="vendor"><span class="ico">VF</span> Vendor Feed</button>
+        <button class="nav-item" data-view="buyer-proposals" data-role-view="buyer"><span class="ico">BP</span> Submitted Vendors</button>
         <button class="nav-item" data-view="kb"><span class="ico">⌕</span> Knowledge Base</button>
         <button class="nav-item" data-view="reputation"><span class="ico">RI</span> Reputation Hub</button>
       </nav>
 
       <div class="sidebar-foot">
+        <div class="session-card" id="sessionCard">
+          <div class="rule-title">Signed in as</div>
+          <b id="sessionName">Not signed in</b>
+          <span id="sessionMeta">Choose buyer or vendor</span>
+          <button class="mini-action" id="switchSessionBtn">Switch demo account</button>
+        </div>
         <div class="rule-card">
           <div class="rule-title">Governance rule</div>
           AI generates → Human reviews → Human approves → Action taken.
@@ -89,6 +109,18 @@
             <p>Browse 30 demo buyers and 30 demo vendors, inspect VRI/BRI signals, badges, and run tender-specific shortlisting.</p>
             <span class="link">Open</span>
           </div>
+          <div class="card feature" data-go="vendor-feed">
+            <div class="feat-ico">VF</div>
+            <h3>Vendor Feed</h3>
+            <p>See generated tenders as a signed-in vendor, inspect buyer reputation, and submit a demo proposal.</p>
+            <span class="link">Open</span>
+          </div>
+          <div class="card feature" data-go="buyer-proposals">
+            <div class="feat-ico">BP</div>
+            <h3>Submitted Vendors</h3>
+            <p>Return to buyer mode and compare submitted vendor proposals with AI committee signals.</p>
+            <span class="link">Open</span>
+          </div>
           <div class="card stat-card">
             <div class="stat-num" id="kbCount">—</div>
             <div class="stat-label">indexed knowledge chunks</div>
@@ -109,16 +141,16 @@
             <div class="required-note"><span class="req">*</span> Required fields from Input Fields.docx.</div>
             <div class="grid two" style="margin-top:14px">
               <div><label class="field-label">Tender title<span class="req">*</span></label><input id="draftTenderTitle" class="input" value="Data Center Infrastructure Upgrade" required /></div>
-              <div><label class="field-label">Tender ID<span class="req">*</span></label><input id="draftTenderId" class="input" value="TND-IT-001" required /></div>
-              <div><label class="field-label">Buyer name<span class="req">*</span></label><input id="draftBuyerName" class="input" value="Mushtary Test Buyer" required /></div>
+              <div><label class="field-label">Tender ID<span class="req">*</span> <span class="muted">system-derived</span></label><input id="draftTenderId" class="input" readonly required /></div>
+              <div><label class="field-label">Buyer name<span class="req">*</span> <span class="muted">from signed-in buyer</span></label><input id="draftBuyerName" class="input" readonly required /></div>
               <div><label class="field-label">Location<span class="req">*</span></label><input id="draftLocation" class="input" value="Riyadh, Saudi Arabia" required /></div>
               <div><label class="field-label">Category<span class="req">*</span></label><select id="draftCategory" class="input" required></select></div>
               <div><label class="field-label">Subcategory<span class="req">*</span></label><select id="draftSubcategory" class="input" required></select></div>
               <div><label class="field-label">Tender type<span class="req">*</span></label><select id="draftTenderType" class="input" required><option>Request for Proposal (RFP)</option></select></div>
               <div><label class="field-label">Procurement method<span class="req">*</span></label><select id="draftProcurementMethod" class="input" required><option>Invited Tender</option></select></div>
             </div>
-            <label class="field-label" style="margin-top:14px">Buyer description<span class="req">*</span></label>
-            <textarea id="draftBuyerDescription" class="input textarea compact-textarea" required>Mushtary Test Buyer requires a qualified IT infrastructure vendor to upgrade its data center environment in Riyadh, Saudi Arabia.</textarea>
+            <label class="field-label" style="margin-top:14px">Buyer description<span class="req">*</span> <span class="muted">from signed-in buyer</span></label>
+            <textarea id="draftBuyerDescription" class="input textarea compact-textarea" readonly required></textarea>
           </details>
           <details class="control-details" open>
             <summary>Dates and validity</summary>
@@ -401,6 +433,39 @@
         </div>
         <div id="shortlistResult"></div>
         <div id="reputationAccounts"></div>
+      </section>
+
+      <!-- VENDOR FEED -->
+      <section class="view" id="view-vendor-feed">
+        <header class="page-head">
+          <h1>Vendor Tender Feed</h1>
+          <p>Generated tenders appear here for vendor-side testing with buyer reputation and requirement context.</p>
+        </header>
+        <div class="panel">
+          <div class="result-head">
+            <div>
+              <div class="result-title">Tender opportunities</div>
+              <div class="hint">Vendor can inspect buyer BRI, payment reliability, dispute rate, scope, and required documents before submitting.</div>
+            </div>
+            <button id="refreshVendorFeedBtn" class="btn ghost">Refresh Feed</button>
+          </div>
+        </div>
+        <div id="vendorFeedResult"></div>
+      </section>
+
+      <!-- BUYER PROPOSALS -->
+      <section class="view" id="view-buyer-proposals">
+        <header class="page-head">
+          <h1>Submitted Vendors</h1>
+          <p>Compare vendor demo proposals for tenders generated by the current buyer account.</p>
+        </header>
+        <div class="panel">
+          <div class="isolation-note">
+            <b>Human-in-the-loop.</b> AI recommends only. Buyer controls final approval and award.
+          </div>
+          <button id="refreshBuyerProposalsBtn" class="btn primary">Compare Submitted Vendors</button>
+        </div>
+        <div id="buyerProposalResult"></div>
       </section>
 
       <!-- KB -->

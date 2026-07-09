@@ -15,6 +15,7 @@ from fpdf.enums import XPos, YPos
 
 OUTPUT_PDF = Path("outputs") / "tender_draft.pdf"
 DEFAULT_LOGO_PATH = Path("assets") / "buyer_logo.png"
+RESORT_BACKGROUND_PATH = Path("Generated image_ Tropical resort icons and hospitality theme.png")
 PDF_FONT = "Helvetica"
 PDF_TEMPLATES = {
     "premium_bw": "Premium B/W",
@@ -164,6 +165,17 @@ def _logo_path(metadata: dict, tender_data_sheet: dict) -> Path | None:
     return None
 
 
+def _draw_resort_background(pdf: FPDF) -> bool:
+    if not RESORT_BACKGROUND_PATH.exists():
+        return False
+
+    try:
+        pdf.image(str(RESORT_BACKGROUND_PATH), x=0, y=0, w=pdf.w, h=pdf.h)
+        return True
+    except Exception:
+        return False
+
+
 def normalize_template(template: str | None) -> str:
     return template if template in PDF_TEMPLATES else DEFAULT_TEMPLATE
 
@@ -181,17 +193,24 @@ def _draw_ai_draft_watermark(pdf: FPDF):
         return
 
     x = pdf.l_margin
-    y = 7
-    w = 42
-    h = 6.2
-    pdf.set_fill_color(*SAUDI_GREEN_PALE)
-    pdf.set_draw_color(*SAUDI_GREEN_LIGHT)
-    pdf.set_line_width(0.12)
+    y = 8.2
+    w = 51
+    h = 7.6
+    pdf.set_fill_color(255, 255, 255)
+    pdf.set_draw_color(214, 230, 222)
+    pdf.set_line_width(0.16)
     pdf.rect(x, y, w, h, style="DF")
-    pdf.set_xy(x + 2, y + 1.4)
+    pdf.set_fill_color(*SAUDI_GREEN)
+    pdf.rect(x, y, 1.8, h, style="F")
+    pdf.set_xy(x + 4.2, y + 1.2)
     pdf.set_text_color(*SAUDI_GREEN_DARK)
-    pdf.set_font(_font(pdf), "B", 6.4)
-    pdf.cell(w - 4, 3.2, _safe_text("AI GENERATED DRAFT"), align="L")
+    pdf.set_font(_font(pdf), "B", 6.1)
+    pdf.cell(18, 2.8, _safe_text("AI DRAFT"), align="L")
+    pdf.set_xy(x + 4.2, y + 4.1)
+    pdf.set_text_color(86, 108, 96)
+    pdf.set_font(_font(pdf), "", 5.1)
+    pdf.cell(w - 7, 2.4, _safe_text("Pending buyer approval"), align="L")
+    pdf.set_text_color(0, 0, 0)
 
 
 def _dedupe_key(text: Any) -> str:
@@ -354,16 +373,15 @@ def _draw_simple_icon(pdf: FPDF, x: float, y: float, kind: int, scale: float = 1
 
 
 def _write_thank_you_page(pdf: FPDF):
-    if not _is_modern(pdf):
-        return
-
     pdf.add_page()
     pdf.full_bleed_pages.add(pdf.page_no())
-    _draw_architecture_background(pdf)
+    has_resort_background = _draw_resort_background(pdf)
+    if not has_resort_background:
+        _draw_architecture_background(pdf)
 
-    for row in range(8):
-        for col in range(3):
-            _draw_simple_icon(pdf, 126 + col * 20, 18 + row * 20, row + col, 1.15)
+        for row in range(8):
+            for col in range(3):
+                _draw_simple_icon(pdf, 126 + col * 20, 18 + row * 20, row + col, 1.15)
 
     pdf.set_text_color(255, 255, 255)
     pdf.set_font(_font(pdf), "B", 33)
@@ -1249,15 +1267,18 @@ def _write_cover_page(pdf: TenderPDF, d: dict, metadata: dict, tender_data_sheet
     tender_title = metadata.get("title") or tender_data_sheet.get("tender_title") or "Tender Draft"
     logo_path = _logo_path(metadata, tender_data_sheet)
 
-    pdf.set_fill_color(255, 255, 255)
-    pdf.rect(0, 0, pdf.w, pdf.h, style="F")
+    has_resort_background = _draw_resort_background(pdf)
+    if not has_resort_background:
+        pdf.set_fill_color(255, 255, 255)
+        pdf.rect(0, 0, pdf.w, pdf.h, style="F")
 
     left = 22
     right = pdf.w - 22
     width = right - left
 
     if pdf.template == "modern_bw":
-        _draw_architecture_background(pdf)
+        if not has_resort_background:
+            _draw_architecture_background(pdf)
         _draw_ai_draft_watermark(pdf)
 
         ref = metadata.get("tender_id") or tender_data_sheet.get("tender_reference", "")
@@ -1396,7 +1417,6 @@ def _write_toc(pdf: TenderPDF):
                 "Document Governance",
                 [
                     "Tender Data Sheet",
-                    "Document Control",
                     "Introduction",
                     "Instructions to Bidders",
                     "Award and Contract",
@@ -1468,11 +1488,11 @@ def _write_toc(pdf: TenderPDF):
                 pdf.set_xy(x + 12, row_y + 2)
                 pdf.set_text_color(*SAUDI_GREEN_MID)
                 pdf.set_font(_font(pdf), "B", 8.4)
-                pdf.cell(13, 3.8, _safe_text(f"{group_index}.{item_index}"))
-                pdf.set_xy(x + 29, row_y + 2)
+                pdf.cell(8.5, 3.8, _safe_text(f"{group_index}.{item_index}"))
+                pdf.set_xy(x + 22.5, row_y + 2)
                 pdf.set_text_color(24, 52, 38)
                 pdf.set_font(_font(pdf), "", 8.8)
-                pdf.cell(w - 32, 3.8, _safe_text(item))
+                pdf.cell(w - 25.5, 3.8, _safe_text(item))
                 pdf.set_y(row_y + 7.4)
 
             pdf.ln(3.5)
@@ -1552,7 +1572,6 @@ def build_pdf(draft: Any, output_path: Path = OUTPUT_PDF, template: str | None =
     _write_cover_page(pdf, d, metadata, tender_data_sheet, intelligence)
 
     _write_tender_data_sheet_page(pdf, tender_data_sheet)
-    _write_document_control_page(pdf, d, metadata, tender_data_sheet, intelligence)
     _write_toc(pdf)
 
     pdf.add_page()

@@ -1,210 +1,690 @@
-# Mushtary MVP - AI Procurement Agents
+# Mushtarry MVP - AI Procurement Intelligence Demo
 
-AI backend and local demo UI for a Saudi B2B procurement/tendering platform.
+Mushtarry MVP is a local FastAPI + vanilla frontend demo for an AI procurement platform. It is built to show that Mushtarry is not only a tender generator: it is a procurement intelligence layer that helps buyers draft tenders, assess tender quality, shortlist vendors, simulate an AI tender committee, expose buyer/vendor reputation signals, and test both buyer-side and vendor-side behavior.
 
-The system is local-first by default: generation runs through Ollama using `qwen3:4b`,
-and RAG embeddings use `qwen3-embedding:0.6b`. Gemini support exists in config for
-temporary API use, but the normal project path is local Ollama.
+The demo is intentionally local-first. The default model path uses Ollama with Qwen, and the UI runs from the FastAPI static server. No production authentication, database, payment, or external marketplace integration is included in this MVP.
 
-**Product rule:** `AI generates -> Human reviews -> Human approves -> Action taken.`
-The AI never publishes, activates, or awards anything. Every generated tender is a
-`DRAFT` until a Buyer Admin approves it.
-
-## What was added
-
-- Two tender drafting modes in the web UI:
-  - Quick Prompt mode: one short idea becomes a full tender.
-  - Project + SoW Guided mode: user enters project name and scope, Qwen reviews/rewrites
-    the scope, then the user generates the tender from the approved scope.
-- Tender form controls in the UI:
-  - template selector for `Modern B/W` and `Premium B/W`
-  - category/subcategory dropdowns
-  - tender type, procurement method, dates, evaluation split, minimum score
-  - checkboxes for commercial protections and vendor requirements
-- Tender Health Committee:
-  - Scope Clarity Agent
-  - Commercial Clarity Agent
-  - Compliance Readiness Agent
-  - Vendor Participation Agent
-  - Aggregator Agent
-- AI Tender Committee:
-  - Technical Agent
-  - Commercial Agent
-  - Compliance Agent
-  - Delivery Agent
-  - Risk Agent
-  - Final AI recommendation score and improvement priorities
-- Health feedback loop:
-  - The health/AI committee output can be applied to the current generated tender.
-  - It edits the existing tender artifact through `/api/jobs/improve-tender`.
-  - It does not dump feedback into the SoW field or create a separate guided draft.
-- Formal tender PDF design:
-  - template selection between `modern_bw` and `premium_bw`
-  - modern Saudi-green cover page, formal tender hierarchy, table of contents, headers,
-    footers, page numbers, AI draft watermark, and final thank-you page
-  - premium classic layout with traditional tables, serif typography, and restrained styling
-  - Tender Data Sheet directly after cover page
-  - formal hierarchy: Section 1 Document Governance, Section 2 Bidder Requirements,
-    Section 3 Project Requirements, Section 4 Commercial, Legal, and Approval
-  - richer payment section with payment schedule tables, invoice requirements, payment
-    controls, tax/currency, retention/withholding, and timeline
-  - Approval block, signature/stamp section, trace ID, version/status controls
-- Health review stays on the website only; it is not included inside the issued tender PDF.
-- Temporary buyer logo support:
-  - Put a logo image at `assets/buyer_logo.png`, or
-  - pass `buyer_logo_path` in tender metadata / tender data sheet.
-- More resilient JSON parsing for local model responses, including accidental JSON lists.
-- Drafting prompts are hierarchy-aware and aligned with the current renderer:
-  - context prompt feeds Section 1.3-1.5
-  - scope prompt feeds Section 3.1-3.3
-  - execution prompt feeds Section 3.4-3.6
-  - legal/evaluation/payment prompt feeds Section 4.1-4.5
-  - legal prompt uses the RAG clause library and requires table-ready payment detail
-
-## Agents
-
-| Agent | Folder | Purpose |
-|---|---|---|
-| Form Generator | `agents/form_generator/` | Turns a short seed/topic into a full buyer form. |
-| SoW Review | `agents/sow_review/` | Scores and rewrites a user-written scope before tender generation. |
-| SoW Extractor | `agents/sow_extractor/` | Turns SoW text/PDF into a structured buyer form. |
-| Tender Drafting | `agents/tender_drafting/` | Expert section agents write the tender sections. |
-| Tender Health Committee | `agents/tender_intelligence/` | Multi-agent review of quality, risk, compliance, and participation. |
-| Vendor Validation | `agents/vendor_validation/` | Vendor registration validation through a tool-use loop. |
-| Evaluation & Ranking | `agents/evaluation/` | Scores bids in isolation, then ranks vendors. |
-| RAG | `agents/rag/` | Clause/law knowledge base and embeddings. |
-
-## Tender drafting pipelines
-
-### Mode 1: Quick Prompt
+Core governance rule:
 
 ```text
-User short prompt
-  -> Form Generator Agent
-  -> Expert tender section agents
-  -> Tender assembler
-  -> Tender Health Committee
-  -> Formal PDF + frontend preview
+AI generates -> Human reviews -> Human approves -> Action taken.
 ```
 
-Example input:
+AI never publishes a tender, finalizes an award, or replaces the buyer. Every tender is a draft until a human Buyer-Admin approves it. Every recommendation is advisory.
+
+## Current Product Scope
+
+The MVP demonstrates these major capabilities:
+
+- AI-assisted tender drafting from a structured buyer form or Scope of Work.
+- Scope of Work review and rewrite before tender generation.
+- PDF/RFP generation with formal procurement sections.
+- Tender Health Committee review.
+- AI Tender Committee simulation.
+- Vendor Reputation Index (VRI).
+- Buyer Reputation Index (BRI).
+- Reputation badges for vendors and buyers.
+- Tender-specific vendor shortlisting.
+- AI recommendation layer with risk, compliance, and success probability.
+- Random buyer/vendor demo sign-in using 30 buyer and 30 vendor dummy accounts.
+- Vendor tender feed showing generated tenders, buyer reputation, and requirements.
+- Vendor testing sandbox for demo proposal submission.
+- Buyer submitted-vendor comparison after vendor proposals are submitted.
+- Vendor validation agent.
+- Bid evaluation and ranking sample.
+- Local RAG knowledge base search.
+
+## User Roles
+
+The frontend opens with a demo sign-in gate. The user chooses one of two roles:
+
+| Role | Behavior |
+|---|---|
+| Buyer | Randomly signs into one of 30 buyer accounts. Can draft tenders, see recommended vendors, and compare submitted vendor proposals. |
+| Vendor | Randomly signs into one of 30 vendor accounts. Can see generated tenders in the vendor feed, inspect buyer reputation, and submit a demo proposal. |
+
+There is no email or password. The session is a local browser demo session only.
+
+Buyer-derived fields:
+
+- `buyer_name` comes from the randomly signed-in buyer account.
+- `buyer_description` comes from the randomly signed-in buyer profile summary.
+- `tender_id` is generated by the backend when the random buyer session is created.
+
+These fields are read-only in the Draft Tender screen because they are system/session fields, not buyer-entered text.
+
+## Human-in-the-Loop Rule
+
+The MVP deliberately avoids fully automated award decisions. The AI can:
+
+- Draft a tender.
+- Identify weak requirements.
+- Recommend tender improvements.
+- Recommend eligible vendors.
+- Rank submitted vendor proposals.
+- Simulate committee agents.
+- Explain why a vendor appears strong or risky.
+
+The AI cannot:
+
+- Publish a tender.
+- Invite or exclude vendors as a final legal action.
+- Award a contract.
+- Override buyer approval.
+- Make a binding procurement decision.
+
+The product language should remain:
+
+```text
+AI recommends only. Buyer controls final approval and award.
+```
+
+## Architecture
+
+```text
+frontend/index.html + frontend/app.js + frontend/styles.css
+        |
+        v
+FastAPI app in api.py
+        |
+        +-- async in-memory job manager
+        +-- tender drafting pipeline
+        +-- SoW review and extraction
+        +-- reputation/VRI/BRI engine
+        +-- vendor shortlisting engine
+        +-- proposal sandbox state
+        +-- vendor validation
+        +-- sample bid evaluation
+        +-- PDF renderer
+        |
+        v
+agents/
+        +-- form_generator
+        +-- sow_review
+        +-- sow_extractor
+        +-- tender_drafting
+        +-- tender_intelligence
+        +-- reputation
+        +-- vendor_validation
+        +-- evaluation
+        +-- rag
+```
+
+Most long-running model work is launched as an async job. The frontend starts the job, polls `/api/jobs/{job_id}`, and displays live activity from `/api/activity`.
+
+The demo stores jobs, published tenders, and submitted proposals in memory. Restarting the server clears that demo state.
+
+## AI and Agent System
+
+Mushtarry uses multiple specialized agents instead of one giant prompt. This makes the output easier to validate, render, improve, and explain.
+
+### Form Generator Agent
+
+Folder:
+
+```text
+agents/form_generator/
+```
+
+Purpose:
+
+- Converts a short seed/topic into a structured buyer form.
+- Produces fields such as title, category, scope, eligibility, documents, dates, and evaluation controls.
+
+Example:
 
 ```text
 hospital MRI machine supply and installation
 ```
 
-The system invents a complete buyer form from the seed, then drafts the tender.
+### Scope of Work Review Agent
 
-### Mode 2: Project + SoW Guided Mode
+Folder:
 
 ```text
-Project name + user-written scope
-  -> SoW Review Agent
-  -> User reviews/edits rewritten scope
-  -> SoW Extractor creates buyer form
-  -> Expert tender section agents
-  -> Tender assembler
-  -> Tender Health Committee
-  -> Formal PDF + frontend preview
+agents/sow_review/
 ```
 
-This mode is better when the buyer already knows the project and wants control over
-the scope before the full tender is generated.
+Purpose:
 
-### Health feedback loop
+- Reviews buyer-entered Scope of Work.
+- Scores clarity and readiness.
+- Detects missing deliverables, responsibilities, timelines, acceptance criteria, and technical gaps.
+- Can rewrite the SoW before the full tender is generated.
 
-After generation, the Tender Health Committee may flag weak areas, for example:
+Frontend button:
 
-- missing project objective
-- empty deliverables
-- missing acceptance criteria
-- missing total duration or milestones
-- missing mandatory vendor documents
+```text
+Evaluate / Rewrite SoW
+```
 
-The frontend button **Apply Health Feedback to Tender** sends the current tender plus
-the health and AI committee findings to `/api/jobs/improve-tender`. The backend edits
-the existing tender artifact and returns an improved tender preview/PDF candidate.
+### Scope of Work Extractor Agent
 
-This loop does not add a new prompt to the Scope of Work field and does not start a new
-guided draft. It is intended to improve the tender that was already generated.
+Folder:
 
-## Tender section agents
+```text
+agents/sow_extractor/
+```
 
-The final tender is not written by one giant prompt. It is assembled from specialist
-section agents:
+Purpose:
 
-| Section agent | Writes |
+- Extracts a structured buyer form from raw SoW text or uploaded PDF-derived content.
+- Used by guided draft and PDF upload flows.
+
+### Tender Drafting Agents
+
+Folder:
+
+```text
+agents/tender_drafting/
+agents/tender_drafting/sections/
+```
+
+The tender is assembled from expert section agents:
+
+| Agent | Writes |
 |---|---|
 | Context Agent | Metadata, Tender Data Sheet, introduction, instructions to bidders, award rules, proposal format. |
 | Scope Agent | Project overview, objectives, scope of work. |
 | Execution Agent | Deliverables, timeline, team requirements, reporting, escalation. |
-| Legal / Evaluation Agent | Terms and conditions, confidentiality, evaluation methodology, payment terms, annexures. |
+| Legal / Evaluation Agent | General terms, confidentiality, evaluation methodology, payment terms, annexures. |
 
-The assembler combines these into one `TenderDraft`, then platform rules are enforced
-deterministically so Mushtarry submission, work order, deliverable, and invoice controls
-are always present.
+The system then assembles the structured outputs into one tender artifact.
 
-## Tender Health Committee
+### Tender Health Committee
 
-The health committee reviews the generated tender after assembly.
+Folder:
 
-| Health agent | Evaluates |
+```text
+agents/tender_intelligence/
+```
+
+Purpose:
+
+- Reviews a generated tender after assembly.
+- Produces quality score, publish readiness, findings, risks, and improvement priorities.
+
+Health agents:
+
+| Health Agent | Evaluates |
 |---|---|
-| Scope Clarity Agent | Objective, deliverables, milestones, acceptance criteria, technical clarity. |
+| Scope Clarity Agent | Objective, deliverables, milestones, technical clarity, acceptance logic. |
 | Commercial Clarity Agent | Pricing, payment basis, invoice controls, commercial proposal requirements. |
 | Compliance Readiness Agent | Eligibility, mandatory documents, submission controls, buyer approval controls. |
-| Vendor Participation Agent | Risk of vendor questions and likely market participation. |
-| Aggregator Agent | Final score, risk summary, publish readiness, improvement priorities. |
+| Vendor Participation Agent | Likely vendor questions, participation friction, market readiness. |
+| Aggregator Agent | Overall quality score, risk summary, readiness, recommended improvements. |
 
-The frontend shows the health score, agent summaries, reasoning summaries, findings,
-evidence, recommendations, and missing/weak requirements.
+The health review stays in the web UI and is not inserted into the issued tender PDF.
 
-## Why agents output JSON instead of Markdown
+### AI Tender Committee
 
-The drafting agents return structured JSON because the tender is assembled, validated,
-scored, and rendered section by section.
+The AI Tender Committee simulates the major roles in a procurement evaluation committee.
 
-JSON lets the app reliably read fields such as:
+Agents:
 
-- `scope_of_work.categories`
-- `deliverables.deliverables`
-- `timeline.milestones`
-- `evaluation_criteria.mandatory_criteria`
-- `payment_terms`
-- `tender_intelligence`
+| Committee Agent | Focus |
+|---|---|
+| Technical Agent | Technical compliance, requirement match, experience, scope fit. |
+| Commercial Agent | Price, value for money, budget alignment. |
+| Compliance Agent | Licenses, documents, legal/compliance readiness. |
+| Delivery Agent | Delivery history, timeliness, execution reliability. |
+| Risk Agent | Disputes, abnormal behavior, pricing risk, profile risk. |
 
-Markdown is better as a final presentation format, but it is fragile as an internal
-agent contract: headings can change, tables can break, and required sections are harder
-to validate. Mushtarry therefore uses JSON for agent outputs, then renders that JSON
-into a professional PDF and frontend preview.
+Final output:
 
-## Tender PDF output
+- Final AI recommendation score.
+- Risk level.
+- Committee comparison.
+- Strengths and weaknesses.
+- Recommended improvements.
+- Advisory final recommendation.
 
-The generated PDF is designed to feel like a formal tender package that a buyer can
-review before issuing to vendors.
+The committee does not make a legal award decision.
 
-There are two selectable templates:
+## Tender Drafting Flow
+
+### Guided Draft Flow
+
+```text
+Buyer signs in
+  -> backend creates buyer session + tender ID
+  -> buyer fills Draft Tender inputs
+  -> buyer writes Scope of Work
+  -> optional SoW review/rewrite
+  -> /api/jobs/draft-guided
+  -> SoW extractor builds buyer form
+  -> section agents draft tender
+  -> Tender Health Committee reviews tender
+  -> PDF + JSON generated
+  -> Recommended Vendors shown
+  -> tender appears in Vendor Feed
+```
+
+### PDF Upload Flow
+
+```text
+Buyer uploads PDF
+  -> /api/jobs/extract or /api/jobs/draft-sow
+  -> extractor reads document
+  -> structured buyer form
+  -> optional full tender drafting
+  -> PDF + JSON
+```
+
+### Health Improvement Flow
+
+```text
+Generated tender
+  -> Tender Health Committee findings
+  -> buyer clicks improve button
+  -> /api/jobs/improve-tender
+  -> existing tender artifact is revised
+  -> new PDF/JSON generated
+```
+
+## Draft Tender Input Model
+
+The Draft Tender form is based on:
+
+```text
+docs/Input Fields.docx
+```
+
+Frontend buyer inputs include:
+
+- Tender title.
+- Location.
+- Category and subcategory.
+- Tender type and procurement method.
+- Dates and proposal validity.
+- Scope of Work.
+- Commercial and legal controls.
+- Eligibility criteria.
+- Required certifications.
+- Required document lists.
+- Evaluation model and minimum score.
+- Mandatory disqualification criteria.
+- Submission method, proposal format, file formats, platform controls.
+
+Optional AI-derived writing overrides:
+
+- Project objective.
+- Technical requirements.
+- Methodology requirements.
+- Deliverables.
+- Timeline milestones.
+- Roles and responsibilities.
+- Evaluation criteria.
+- Technical evaluation parameters.
+- Financial evaluation parameters.
+
+If optional override fields are blank, Qwen derives them from the Scope of Work and project context. Blank optional fields should not overwrite generated/extracted values.
+
+System-derived or backend fields:
+
+- `buyer_id`
+- `buyer_name`
+- `buyer_description`
+- `tender_id`
+- API keys
+- output file names
+- trace IDs
+- generated timestamps
+
+## Reputation Intelligence
+
+Folder:
+
+```text
+agents/reputation/
+```
+
+The demo contains:
+
+- 30 dummy vendor accounts.
+- 30 dummy buyer accounts.
+
+These accounts support the reputation hub, vendor feed, shortlisting, buyer reputation display, and proposal comparison.
+
+### Vendor Reputation Index (VRI)
+
+VRI is a 0-100 strategic vendor intelligence score. It goes beyond star ratings and asks:
+
+```text
+Is this vendor reliable for this type of work?
+```
+
+VRI components:
+
+| Component | Weight |
+|---|---:|
+| Performance Rating | 20% |
+| Compliance & Licenses | 15% |
+| Institutional Verification | 15% |
+| Delivery Performance | 15% |
+| Financial Strength | 10% |
+| Tender Success Rate | 10% |
+| Contract History | 10% |
+| AI Risk Signals | 5% |
+
+VRI levels:
+
+| Score | Level |
+|---:|---|
+| 85-100 | Elite Vendor |
+| 75-84 | Strategic Vendor |
+| 65-74 | Trusted Vendor |
+| 50-64 | Verified Vendor |
+| < 50 | Under Review |
+
+Example output:
+
+```text
+Vendor A, VRI 91/100, Elite Vendor
+Vendor B, VRI 84/100, Strategic Vendor
+Vendor C, VRI 73/100, Trusted Vendor
+```
+
+### Buyer Reputation Index (BRI)
+
+BRI is a buyer-side reputation score that protects vendors from unclear, unfair, or risky procurement behavior.
+
+BRI components:
+
+| Component | Weight |
+|---|---:|
+| Payment Reliability | 30% |
+| Evaluation Fairness | 20% |
+| Dispute Behavior | 20% |
+| Procurement Volume | 15% |
+| Platform Activity | 10% |
+| AI Risk Signals | 5% |
+
+Buyer profile display includes:
+
+```text
+Buyer Score: 88/100
+Badge: Trusted Buyer
+Payment Reliability: 95%
+Dispute Rate: Low
+```
+
+### Reputation Badges
+
+Vendor badge examples:
+
+- Elite Vendor
+- Trusted Vendor
+- Verified Vendor
+- Developing Vendor
+- Under Observation
+
+Buyer badge examples:
+
+- Strategic Buyer
+- Trusted Buyer
+- Verified Buyer
+- Developing Buyer
+- Under Observation
+
+Special recognition badges include:
+
+- Fast Delivery Vendor
+- Excellent Communication
+- Compliance Champion
+- AI Optimized Vendor
+- Strategic Partner
+- Reliable Payment
+- Fair Evaluation
+- Transparent Procurement
+
+Badges are positive signals and should not be treated as permanent punishment.
+
+## AI Vendor Selection Engine
+
+The AI Vendor Selection Engine does not simply pick the highest VRI. It ranks vendors for the specific tender.
+
+Selection logic combines:
+
+- VRI.
+- Requirement match.
+- Proposal quality.
+- Price competitiveness.
+- Risk adjustment.
+
+The UI shows:
+
+```text
+AI Recommendation Enabled: YES
+VRI Weight: 20%
+Technical Evaluation: 50%
+Financial Evaluation: 20%
+Risk Assessment: 10%
+Recommended Vendor Ranking
+Risk Score
+Probability of Success
+Compliance Status
+```
+
+Shortlisting before publishing shows:
+
+```text
+Potential Eligible Vendors Found
+High Match Vendors
+Medium Match Vendors
+Low Match Vendors
+Excluded Vendors
+```
+
+The buyer sees top vendors and bucketed eligible vendors. This is advisory only.
+
+## Vendor Testing Sandbox
+
+The vendor sandbox is a demo flow for testing vendor-side behavior.
+
+Flow:
+
+```text
+Buyer signs in
+  -> Generate Tender
+  -> Recommended Vendors appear
+  -> Tender is published to in-memory vendor feed
+  -> Switch to Vendor Sandbox
+  -> Random vendor signs in
+  -> Vendor sees tender feed
+  -> Vendor sees buyer reputation, requirements, budget, scope
+  -> Vendor submits demo proposal
+  -> Return to Buyer Comparison
+  -> Buyer sees submitted vendor ranking
+```
+
+Vendor feed displays:
+
+- Tender title and reference.
+- Buyer name.
+- Buyer Score / BRI.
+- Buyer badge.
+- Payment reliability.
+- Dispute rate.
+- Category and subcategory.
+- Location.
+- Budget.
+- Evaluation model.
+- Required certifications.
+- Minimum years experience.
+- Minimum similar projects.
+- Scope of Work.
+- Whether the current vendor was in the top recommended shortlist.
+
+Vendor proposal fields:
+
+- Demo price.
+- Delivery timeline days.
+- Technical proposal summary.
+- Commercial proposal summary.
+
+Submitted proposals are stored in memory for the current server process.
+
+## Buyer Submitted-Vendor Comparison
+
+After a vendor submits a proposal, the buyer can open:
+
+```text
+Submitted Vendors
+```
+
+The comparison view shows:
+
+- Ranked submitted vendors.
+- AI recommendation score.
+- VRI and VRI level.
+- Risk level.
+- Risk score.
+- Probability of success.
+- Compliance status.
+- Proposal price.
+- Timeline.
+- AI Tender Committee score.
+- Committee agent summaries.
+- Explainability reasons.
+
+The ranking is still advisory. The buyer controls final approval and award.
+
+## Vendor Validation
+
+Folder:
+
+```text
+agents/vendor_validation/
+```
+
+Purpose:
+
+- Validates a vendor registration.
+- Checks CR format/status, legal names, duplicate risk, category alignment, and uploaded documents.
+- Produces an approve/correct/flag style result for human admin review.
+
+Frontend fields:
+
+- Commercial Registration number.
+- Legal name in English.
+- Legal name in Arabic.
+- Selected category.
+- Uploaded document types.
+
+## Evaluation & Ranking
+
+Folder:
+
+```text
+agents/evaluation/
+```
+
+The sample evaluation flow scores each vendor submission in isolation, then ranks using only the scores.
+
+This protects evaluation fairness:
+
+```text
+Each vendor is scored alone -> ranking sees only scores -> buyer receives recommendation.
+```
+
+The sample uses:
+
+```text
+agents/samples/vendor_submissions.json
+```
+
+## RAG Knowledge Base
+
+Folder:
+
+```text
+agents/rag/
+```
+
+The RAG layer grounds drafting agents in clause, policy, and law material.
+
+Included clause sources:
+
+```text
+agents/rag/sources/clauses/
+```
+
+Examples:
+
+- Governing law and general conditions.
+- Confidentiality.
+- Evaluation methodology.
+- Payment terms.
+- Bid security and bonds.
+- Liquidated damages.
+- Eligibility and qualifications.
+- Submission and award.
+- Warranty, delivery, and acceptance.
+- Compliance, localization, and conduct.
+
+Rebuild examples:
+
+```bat
+uv run python -m agents.rag.index_documents agents/rag/sources/clauses --authority policy --rebuild
+uv run python -m agents.rag.index_documents "docs/Government_Tenders_and_Procurement_Law.pdf" --authority law
+```
+
+Only index human-approved material. Do not index unapproved AI drafts.
+
+## PDF Rendering
+
+File:
+
+```text
+pdf_renderer.py
+```
+
+The renderer converts structured tender JSON into a formal PDF.
+
+Templates:
 
 | Template | Purpose |
 |---|---|
-| `modern_bw` | Saudi-green modern tender package with a SCA-inspired cover, formal hierarchy, structured tables, grouped table of contents, draft watermark, footer, and final thank-you page. |
-| `premium_bw` | Classic procurement style with serif typography, traditional tables, conservative spacing, and formal bolding. |
+| `premium_bw` | Classic procurement style with serif typography, formal tables, restrained spacing, and conservative visual hierarchy. |
+| `modern_bw` | Modern Saudi-green package with structured sections, draft watermark, table of contents, and thank-you page. |
 
-The modern template includes:
+Current visual asset:
 
-- Cover page with project name, request number, version, issue date, publisher, and
-  copyright information.
-- Tender Data Sheet immediately after the cover page.
-- Grouped table of contents, for example `Section 1: Document Governance` with
-  numbered entries underneath.
-- Formal hierarchy across governance, bidder requirements, project requirements, and
-  commercial/legal/approval sections.
-- Structured tables for Tender Data Sheet, submission rules, evaluation criteria,
-  payment schedule, invoice requirements, payment controls, and approval.
-- AI-generated draft watermark in the upper-left area of content pages.
-- Green rule styling and header/footer treatments; health and committee results stay
-  in the website and are not rendered into the tender PDF.
-- Final thank-you page that is excluded from the table of contents.
+```text
+Generated image_ Tropical resort icons and hospitality theme.png
+```
+
+This PNG is used as the full-page background on:
+
+- Cover page.
+- Thank-you page.
+
+If the PNG is missing, the renderer falls back to its built-in background behavior.
+
+PDF contents include:
+
+- Cover page.
+- Tender Data Sheet.
+- Table of contents.
+- Introduction.
+- Instructions to bidders.
+- Award and contract rules.
+- Vendor document requirements.
+- Proposal packaging and format.
+- Project overview.
+- Objectives.
+- Scope of work.
+- Deliverables.
+- Timeline.
+- Team requirements.
+- General and special terms.
+- Confidentiality.
+- Evaluation methodology.
+- Payment terms.
+- Annexures.
+- Buyer approval section.
+- Thank-you page.
 
 Logo behavior:
 
@@ -212,31 +692,91 @@ Logo behavior:
 assets/buyer_logo.png
 ```
 
-If this file exists, it is used on the cover page. If no logo is found, the renderer
-falls back to a simple initials box based on the buyer entity name.
+If present, it can be used on the cover. Otherwise the renderer falls back to buyer initials.
+
+## API Endpoints
+
+### Jobs
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/api/jobs/draft` | POST | Start a full draft from seed/form data. |
+| `/api/jobs/draft-guided` | POST | Start guided draft from project name + SoW. |
+| `/api/jobs/sow-review` | POST | Review/rewrite Scope of Work. |
+| `/api/jobs/draft-sow` | POST | Upload PDF and run full draft. |
+| `/api/jobs/form` | POST | Generate buyer form. |
+| `/api/jobs/extract` | POST | Extract buyer form from uploaded document. |
+| `/api/jobs/validate` | POST | Run vendor validation job. |
+| `/api/jobs/evaluate` | POST | Run bundled sample evaluation/ranking. |
+| `/api/jobs/improve-tender` | POST | Improve current tender using committee feedback. |
+| `/api/jobs/{job_id}` | GET | Poll job status/result. |
+
+### Demo Session and Marketplace
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/api/session/random` | POST | Sign in as random buyer or vendor. |
+| `/api/tenders/feed` | GET | Vendor-visible generated tender feed. |
+| `/api/tenders/{tender_id}` | GET | Tender detail. |
+| `/api/tenders/{tender_id}/proposals` | POST | Submit vendor demo proposal. |
+| `/api/proposals/compare` | GET | Buyer submitted-vendor comparison. |
+
+### Reputation and Intelligence
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/api/reputation` | GET | Marketplace snapshot with buyers, vendors, VRI, BRI, badges. |
+| `/api/accounts/vendors` | GET | List vendor accounts. |
+| `/api/accounts/vendors/{vendor_id}` | GET | Vendor profile. |
+| `/api/accounts/buyers` | GET | List buyer accounts. |
+| `/api/accounts/buyers/{buyer_id}` | GET | Buyer profile. |
+| `/api/intelligence/shortlist` | POST | Tender-specific vendor shortlisting and recommendation layer. |
+
+### Other
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/api/meta` | GET | Model, embedding, category, and knowledge-base metadata. |
+| `/api/activity` | GET | Live activity feed for running agents. |
+| `/api/kb/search` | GET | Semantic search over the local RAG corpus. |
+| `/api/download/{file_id}/{kind}` | GET | Download generated PDF or JSON. |
+
+## Frontend Screens
+
+| Screen | Purpose |
+|---|---|
+| Overview | Entry screen with links to major demo areas. |
+| Draft Tender | Buyer form, SoW review, tender generation, recommended vendors. |
+| Extract from PDF | Upload document, extract form, or run full pipeline. |
+| Vendor Validation | Run vendor registration validation. |
+| Evaluate & Rank | Run bundled sample bid evaluation. |
+| Vendor Feed | Vendor-side tender opportunities and proposal submission. |
+| Submitted Vendors | Buyer-side comparison of submitted vendor proposals. |
+| Knowledge Base | Search local RAG corpus. |
+| Reputation Hub | Browse buyer/vendor accounts, VRI, BRI, badges, and shortlisting. |
 
 ## Setup
 
-Install Ollama, then pull the local models:
+Install Ollama and pull the recommended local models:
 
 ```bat
 ollama pull qwen3:4b
 ollama pull qwen3-embedding:0.6b
 ```
 
-Install Python dependencies:
+Install dependencies:
 
 ```bat
 uv sync
 ```
 
-Or, if not using `uv`:
+Alternative:
 
 ```bat
 pip install -r agents\requirements.txt
 ```
 
-Optional local environment file:
+Create a local `.env` if needed:
 
 ```bat
 copy .env.example .env
@@ -252,7 +792,9 @@ LLM_API_KEY="ollama"
 RAG_EMBED_MODEL="qwen3-embedding:0.6b"
 ```
 
-## Run the web demo
+Gemini/OpenRouter support exists in config for temporary API use, but the intended MVP path is local Ollama.
+
+## Run the Web Demo
 
 From the project root:
 
@@ -266,72 +808,39 @@ Open:
 http://localhost:8000
 ```
 
-If port `8000` is already busy:
+If port 8000 is busy:
 
 ```bat
-netstat -ano | findstr :8000
-taskkill /PID THE_PID_HERE /F
-uv run python api.py
+uv run python -m uvicorn api:app --host 127.0.0.1 --port 8001
 ```
 
-## How to use the UI
-
-### Draft Tender
-
-Before generating, set the tender controls at the top of the Draft Tender tab:
-
-- template design (`Modern B/W` or `Premium B/W`)
-- category and subcategory
-- tender type and procurement method
-- issue date, submission deadline, evaluation split, and minimum score
-- required vendor documents and commercial protections
-
-Then use either:
-
-- **Quick Prompt:** enter a short topic and click **Run Full Pipeline**.
-- **Project + SoW Guided Mode:** enter project name and scope, click
-  **Evaluate / Rewrite SoW**, edit if needed, then click
-  **Generate Tender From Approved SoW**.
-
-After the tender is generated:
-
-- Review the frontend preview.
-- Download PDF or JSON.
-- Review Tender Health Score.
-- Review AI Tender Committee scores and improvement priorities.
-- Use **Apply Health Feedback to Tender** if the health or AI committee finds gaps.
-
-### Extract from PDF
-
-Upload an SoW/RFP PDF.
-
-- **Extract Buyer Form:** only extracts the structured form.
-- **Full Pipeline: Extract -> Draft Tender:** extracts and then generates the tender.
-
-### Vendor Validation
-
-Runs the vendor validation agent over:
-
-- CR number
-- legal names
-- selected category
-- uploaded document types
-
-Returns approve/correct/flag-style output for human admin review.
-
-### Evaluate & Rank
-
-Runs the bundled sample bid evaluation:
+Open:
 
 ```text
-each vendor scored in isolation -> ranking sees only scores -> recommendation
+http://127.0.0.1:8001
 ```
 
-### Knowledge Base
+## Recommended Demo Script
 
-Searches the local RAG corpus used by the drafting agents.
+1. Open the app.
+2. Choose `Continue as Random Buyer`.
+3. Go to `Draft Tender`.
+4. Confirm buyer name, buyer description, and tender ID are read-only and session-derived.
+5. Edit project/tender fields if needed.
+6. Write or keep the Scope of Work.
+7. Click `Evaluate / Rewrite SoW`.
+8. Click `Generate Tender From Approved SoW`.
+9. Review the generated tender preview.
+10. Review Recommended Vendors.
+11. Click `Switch to Vendor Sandbox`.
+12. Submit a demo proposal as the random vendor.
+13. Click `Return to Buyer Comparison`.
+14. Compare submitted vendors.
+15. Confirm AI recommendation is advisory only.
 
-## CLI commands
+## CLI Commands
+
+Examples:
 
 ```bat
 uv run python run.py
@@ -344,72 +853,97 @@ uv run python run.py --mode score --input scoring.json
 uv run python run.py --mode rank --input ranking.json
 ```
 
-Outputs are written to `outputs/`.
-
-## What to expect
-
-Generated files are organized under `outputs/`:
-
-| Folder | Contents |
-|---|---|
-| `outputs/tenders/` | Generated tender JSON and PDF files, including modern/premium previews. |
-| `outputs/evaluation/` | Vendor evaluation and ranking outputs. |
-| `outputs/forms/` | Extracted or generated buyer forms. |
-| `outputs/legacy_demo/` | Legacy demo artifacts kept for comparison. |
-| `outputs/uploads/` | Uploaded PDFs/files used by the local demo. |
-
-Typical tender outputs look like:
+Outputs are written under:
 
 ```text
-outputs/tenders/tender_<job_id>.json
-outputs/tenders/tender_<job_id>.pdf
-outputs/tenders/preview_modern_bw.pdf
-outputs/tenders/preview_premium_bw.pdf
+outputs/
 ```
 
-Local Qwen generation can take several minutes because the app runs multiple drafting,
-health, and improvement agents. The browser job panel shows progress while the backend
-works.
+## Tests and Checks
 
-## Tests and checks
+Useful validation commands:
 
 ```bat
 node --check frontend\app.js
-uv run python -B -m py_compile api.py pdf_renderer.py agents\tender_drafting\schemas.py agents\tender_drafting\sections\legal_eval.py agents\tender_intelligence\health.py
+uv run python -B -m py_compile api.py agents\reputation\engine.py pdf_renderer.py
 uv run python -m unittest discover -s agents\tests -v
 ```
 
-## RAG corpus
-
-The local RAG layer grounds drafting agents on clause/policy/law material.
-
-Rebuild examples:
+Smoke-test examples used during development:
 
 ```bat
-uv run python -m agents.rag.index_documents agents/rag/sources/clauses --authority policy --rebuild
-uv run python -m agents.rag.index_documents "docs/Government_Tenders_and_Procurement_Law.pdf" --authority law
+uv run python -B -m py_compile api.py agents\reputation\engine.py
+uv run python -B -m py_compile pdf_renderer.py
+node --check frontend\app.js
 ```
 
-Only index human-approved material. Do not index unapproved AI drafts.
+## Key Files
 
-## Key files
-
-| File | Purpose |
+| File or Folder | Purpose |
 |---|---|
-| `api.py` | FastAPI demo backend and async job manager. |
-| `frontend/` | Local browser UI. |
-| `agents/graph/pipeline.py` | LangGraph tender drafting pipeline. |
-| `agents/tender_drafting/sections/` | Expert section agents. |
-| `agents/tender_intelligence/` | Tender Health Committee and AI Tender Committee scoring. |
-| `agents/sow_review/` | Guided SoW review/rewrite agent. |
-| `pdf_renderer.py` | Modern and premium tender PDF renderer. |
-| `assets/buyer_logo.png` | Optional temporary buyer logo used on the tender PDF cover. |
-| `agents/prompts/` | System prompts for drafting and health agents. |
-| `agents/prompt_registry.py` | Prompt registry and versions. |
+| `api.py` | FastAPI backend, async job manager, demo session, tender feed, proposal comparison, endpoints. |
+| `frontend/index.html` | Vanilla HTML UI. |
+| `frontend/app.js` | Frontend state, API calls, rendering, buyer/vendor demo flow. |
+| `frontend/styles.css` | UI styling. |
+| `pdf_renderer.py` | Tender PDF renderer and cover/thank-you background handling. |
+| `Generated image_ Tropical resort icons and hospitality theme.png` | Current cover and thank-you background image. |
+| `agents/reputation/engine.py` | 30 buyers, 30 vendors, VRI, BRI, badges, shortlisting, committee scoring. |
+| `agents/tender_drafting/` | Tender section agents and schemas. |
+| `agents/tender_intelligence/` | Tender health and committee intelligence. |
+| `agents/sow_review/` | SoW review and rewrite. |
+| `agents/sow_extractor/` | SoW/PDF extraction into buyer form. |
+| `agents/vendor_validation/` | Vendor validation agent. |
+| `agents/evaluation/` | Vendor scoring and ranking sample. |
+| `agents/rag/` | Local knowledge base, chunking, embeddings, retrieval. |
+| `agents/prompts/` | System prompts used by agents. |
+| `docs/Input Fields.docx` | Source of truth for buyer input fields. |
+| `docs/New folder/` | Business/source docs for VRI, badges, AI vendor selection, and AI tender committee. |
 
-## Notes
+## Project Limitations
 
-- Local Qwen 3 4B can be slow on laptop GPUs; full tender generation can take minutes.
-- Gemini API support exists but may hit free-tier request limits quickly because the
-  pipeline uses multiple agents.
-- Keep API keys only in `.env`; never commit real keys.
+This is an MVP/demo, not production infrastructure.
+
+Current limitations:
+
+- No persistent database.
+- Demo sessions are browser/local only.
+- Published tenders and submitted proposals are stored in server memory.
+- Restarting the API clears in-memory tender/proposal sandbox state.
+- No production authentication.
+- No production authorization/RBAC.
+- No production audit log.
+- No payment or contract execution integration.
+- No real vendor marketplace integration.
+- No legal guarantee that generated tender text is ready to issue.
+
+Production would require:
+
+- Database-backed tenders, proposals, accounts, and audit events.
+- Role-based access control.
+- Organization membership.
+- Real document storage.
+- Real vendor onboarding and validation integrations.
+- Approval workflows.
+- Tender publication workflow.
+- Notification system.
+- Legal review and compliance hardening.
+- Observability and background worker infrastructure.
+
+## Security and Data Notes
+
+- Keep API keys in `.env`.
+- Do not commit real secrets.
+- Use dummy/demo accounts only in this MVP.
+- Treat generated tender content as draft content.
+- Do not index unapproved AI drafts into the RAG corpus.
+- AI recommendations should always be explainable and reviewable by humans.
+
+## Current GitHub Demo State
+
+The current MVP includes the recent buyer/vendor reputation intelligence work, random buyer/vendor sign-in, vendor tender feed, demo proposal submission, buyer submitted-vendor comparison, and PDF cover/thank-you background image support.
+
+Important rule to preserve in future work:
+
+```text
+Mushtarry's differentiation is procurement intelligence, not just tender generation.
+```

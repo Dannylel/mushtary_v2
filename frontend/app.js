@@ -17,6 +17,8 @@ let lastHealthPromptPatch = null;
 let platformCategories = {};
 let lastDraftResult = null;
 let reputationData = null;
+let currentSession = null;
+let selectedVendorTenderId = null;
 const PDF_TEMPLATES = [
   ["premium_bw", "Premium B/W"],
   ["modern_bw", "Modern B/W"],
@@ -202,9 +204,6 @@ function collectDraftOverrides() {
 function missingRequiredDraftFields() {
   const missing = [
     ["#draftTenderTitle", "Tender title"],
-    ["#draftTenderId", "Tender ID"],
-    ["#draftBuyerName", "Buyer name"],
-    ["#draftBuyerDescription", "Buyer description"],
     ["#draftCategory", "Category"],
     ["#draftSubcategory", "Subcategory"],
     ["#draftTenderType", "Tender type"],
@@ -286,11 +285,115 @@ function show(view) {
   $$(".nav-item").forEach(b => b.classList.toggle("active", b.dataset.view === view));
   $$(".view").forEach(v => v.classList.toggle("active", v.id === `view-${view}`));
   window.scrollTo({ top: 0 });
+  if (view === "vendor-feed") loadVendorFeed();
+  if (view === "buyer-proposals") loadBuyerProposalComparison();
 }
 $$(".nav-item").forEach(b => b.addEventListener("click", () => show(b.dataset.view)));
 $$("[data-go]").forEach(c => c.addEventListener("click", () => show(c.dataset.go)));
 
 // ── Live activity console ─────────────────────────────────────────────────────
+// Demo sign-in
+function sessionAccountId() {
+  return currentSession?.account?.account_id || "";
+}
+
+function sessionRole() {
+  return currentSession?.role || "";
+}
+
+function setSignedInBuyerFields() {
+  if (sessionRole() !== "buyer") return;
+  const account = currentSession.account || {};
+  if (!currentSession.current_tender_id && account.account_id) {
+    currentSession.current_tender_id = `TND-${account.account_id.replace("BUY-", "BUY")}-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
+    localStorage.setItem("mushtaryDemoSession", JSON.stringify(currentSession));
+  }
+  const tenderId = $("#draftTenderId");
+  const buyerName = $("#draftBuyerName");
+  const buyerDescription = $("#draftBuyerDescription");
+  if (tenderId) tenderId.value = currentSession.current_tender_id || "";
+  if (buyerName) buyerName.value = account.name || buyerName.value;
+  if (buyerDescription && account.profile_summary) buyerDescription.value = account.profile_summary;
+}
+
+function updateRoleNavigation() {
+  const role = sessionRole();
+  const buyerOnly = ["draft", "extract", "evaluate", "buyer-proposals"];
+  const vendorOnly = ["vendor-feed"];
+  $$("[data-role-view]").forEach(el => {
+    el.style.display = !role || el.dataset.roleView === role ? "" : "none";
+  });
+  $$(".nav-item, [data-go]").forEach(el => {
+    const view = el.dataset.view || el.dataset.go;
+    let visible = true;
+    if (role === "vendor" && buyerOnly.includes(view)) visible = false;
+    if (role === "buyer" && vendorOnly.includes(view)) visible = false;
+    el.style.display = visible ? "" : "none";
+  });
+}
+
+function renderSession() {
+  const gate = $("#signinGate");
+  if (gate) gate.classList.toggle("hidden", !!currentSession);
+  const account = currentSession?.account || {};
+  $("#sessionName").textContent = account.name || "Not signed in";
+  $("#sessionMeta").textContent = currentSession
+    ? `${currentSession.role.toUpperCase()} - ${account.account_id || ""} - ${account.badge || account.bri?.level || account.vri?.level || ""}`
+    : "Choose buyer or vendor";
+  updateRoleNavigation();
+  setSignedInBuyerFields();
+}
+
+async function signInRandom(role) {
+  const data = await fetch("/api/session/random", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ role }),
+  }).then(r => r.json());
+  currentSession = data.session;
+  localStorage.setItem("mushtaryDemoSession", JSON.stringify(currentSession));
+  if (role === "buyer") localStorage.setItem("mushtaryLastBuyerSession", JSON.stringify(currentSession));
+  renderSession();
+  show(role === "vendor" ? "vendor-feed" : "overview");
+}
+
+function returnToLastBuyer() {
+  const saved = localStorage.getItem("mushtaryLastBuyerSession");
+  if (saved) {
+    currentSession = JSON.parse(saved);
+    localStorage.setItem("mushtaryDemoSession", JSON.stringify(currentSession));
+    renderSession();
+    show("buyer-proposals");
+    return;
+  }
+  signInRandom("buyer").then(() => show("buyer-proposals"));
+}
+
+function switchToVendorSandbox() {
+  if (sessionRole() === "vendor") {
+    show("vendor-feed");
+    return;
+  }
+  signInRandom("vendor");
+}
+
+function restoreSession() {
+  try {
+    currentSession = JSON.parse(localStorage.getItem("mushtaryDemoSession") || "null");
+  } catch {
+    currentSession = null;
+  }
+  renderSession();
+}
+
+$("#signinBuyerBtn")?.addEventListener("click", () => signInRandom("buyer"));
+$("#signinVendorBtn")?.addEventListener("click", () => signInRandom("vendor"));
+$("#switchSessionBtn")?.addEventListener("click", () => {
+  localStorage.removeItem("mushtaryDemoSession");
+  currentSession = null;
+  renderSession();
+});
+
 const consoleEl = $("#console"), consoleBody = $("#consoleBody"),
       consoleDot = $("#consoleDot"), consoleSub = $("#consoleSub");
 let actLast = 0, actTimer = null, actStopAt = null;
@@ -871,6 +974,7 @@ function renderDraft(result) {
       ${fid ? `<a class="btn primary" href="/api/download/${fid}/pdf?template=${encodeURIComponent(activeTemplate)}" target="_blank">⬇ Download ${esc(PDF_TEMPLATES.find(([v]) => v === activeTemplate)?.[1] || "PDF")}</a>
       ${PDF_TEMPLATES.filter(([v]) => v !== activeTemplate).map(([v, label]) => `<a class="btn ghost" href="/api/download/${fid}/pdf?template=${encodeURIComponent(v)}" target="_blank">⬇ ${esc(label)}</a>`).join("")}
       <a class="btn ghost" href="/api/download/${fid}/json" target="_blank">⬇ JSON</a>` : ""}
+      ${result.published_tender ? `<button class="btn ghost" onclick="switchToVendorSandbox()">Switch to Vendor Sandbox</button>` : ""}
     </div>
     <div id="draftVendorRecommendations" class="section-block">
       <div class="sb-head"><span class="num">V</span>Recommended Vendors</div>
@@ -962,6 +1066,11 @@ $("#reviewSowBtn").addEventListener("click", () => {
 });
 
 $("#guidedDraftBtn").addEventListener("click", () => {
+  if (sessionRole() !== "buyer") {
+    $("#draftResult").innerHTML = errorHTML("Sign in as a buyer first. Buyer name, buyer description, and tender ID are generated from the backend buyer session.");
+    return;
+  }
+  setSignedInBuyerFields();
   const project_name = $("#draftTenderTitle").value.trim();
   const scope_text = $("#draftScope").value.trim();
   const template = selectedPdfTemplate();
@@ -977,7 +1086,7 @@ $("#guidedDraftBtn").addEventListener("click", () => {
     loadSub: "Extracting buyer form, then running the expert tender section agents",
     start: () => fetch("/api/jobs/draft-guided", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ project_name, scope_text, template, form_overrides }),
+      body: JSON.stringify({ project_name, scope_text, template, form_overrides, buyer_id: sessionRole() === "buyer" ? sessionAccountId() : null }),
     }).then(r => r.json()),
     render: renderDraft,
   });
@@ -1013,6 +1122,7 @@ $("#extractDraftBtn").addEventListener("click", () => {
   const fd = new FormData(); fd.append("file", pickedFile);
   fd.append("template", selectedPdfTemplate());
   fd.append("form_overrides", JSON.stringify(collectDraftOverrides()));
+  if (sessionRole() === "buyer") fd.append("buyer_id", sessionAccountId());
   runJob({
     target: "#extractResult",
     loadMain: "Full pipeline: extracting, then drafting the complete tender…",
@@ -1415,8 +1525,195 @@ function renderBucket(label, vendors) {
   </div>`;
 }
 
+function buyerReputationHTML(buyer) {
+  if (!buyer) return "";
+  return `<div class="rep-summary">
+    <div class="intel-grid">
+      ${metricCard("Buyer Score", `${buyer.buyer_score ?? buyer.bri?.overall ?? "-"} / 100`, buyer.bri?.level || "")}
+      ${metricCard("Badge", buyer.badge || "-")}
+      ${metricCard("Payment Reliability", `${buyer.payment_reliability ?? "-"}%`)}
+      ${metricCard("Dispute Rate", buyer.dispute_rate_level || buyer.dispute_rate || "-")}
+    </div>
+  </div>`;
+}
+
+function tenderReqHTML(tender) {
+  return `<dl class="kv">
+    <dt>Category</dt><dd>${esc(tender.category)} / ${esc(tender.subcategory)}</dd>
+    <dt>Location</dt><dd>${esc(tender.location || "-")}</dd>
+    <dt>Budget</dt><dd>${esc(tender.budget_range || sar(tender.estimated_value_sar))}</dd>
+    <dt>Evaluation</dt><dd>${esc(tender.evaluation_model || "-")}</dd>
+    <dt>Required Certifications</dt><dd>${esc((tender.required_certifications || []).join(", ") || "-")}</dd>
+    <dt>Minimum Experience</dt><dd>${esc(tender.minimum_years_experience)} years, ${esc(tender.minimum_similar_projects)} similar projects</dd>
+  </dl>`;
+}
+
+function renderVendorTenderCard(tender) {
+  const vendor = currentSession?.account || {};
+  const id = tender.id;
+  const submitted = tender.current_vendor_proposal;
+  const recommended = tender.recommended_to_current_vendor
+    ? `<span class="badge ok dot">Recommended to you${tender.current_vendor_rank ? ` - rank #${tender.current_vendor_rank}` : ""}</span>`
+    : `<span class="badge draft dot">Open opportunity</span>`;
+  return `<div class="section-block vendor-opportunity" id="tender-${esc(id)}">
+    <div class="sb-head"><span class="num">T</span>${esc(tender.title)} <span class="badge draft">${esc(tender.reference)}</span></div>
+    <div class="sb-body">
+      <div class="result-head">
+        <div>
+          <div class="vc-name">${esc(tender.buyer?.name || "Buyer")}</div>
+          <div class="hint" style="margin:0">${esc(tender.human_in_the_loop || "AI recommends only. Buyer controls final approval and award.")}</div>
+        </div>
+        ${recommended}
+      </div>
+      ${buyerReputationHTML(tender.buyer)}
+      ${sub("Tender Requirements", tenderReqHTML(tender))}
+      ${sub("Scope of Work", para(tender.scope_of_work))}
+      <div class="grid two proposal-grid">
+        <div>
+          <label class="field-label">Demo price SAR</label>
+          <input id="proposalPrice-${esc(id)}" class="input" type="number" value="${esc(vendor.typical_bid_sar || tender.estimated_value_sar || "")}" />
+        </div>
+        <div>
+          <label class="field-label">Delivery timeline days</label>
+          <input id="proposalTimeline-${esc(id)}" class="input" type="number" value="90" />
+        </div>
+      </div>
+      <label class="field-label" style="margin-top:14px">Technical proposal summary</label>
+      <textarea id="proposalTech-${esc(id)}" class="input textarea mini-textarea">We can deliver the requested scope using our relevant category experience, verified documents, and delivery team.</textarea>
+      <label class="field-label" style="margin-top:14px">Commercial proposal summary</label>
+      <textarea id="proposalCommercial-${esc(id)}" class="input textarea mini-textarea">Commercial offer is aligned with the stated budget range and includes required support and warranty assumptions.</textarea>
+      <div class="toolbar" style="margin-top:14px">
+        <button class="btn primary" onclick="submitDemoProposal('${esc(id)}')" ${submitted ? "disabled" : ""}>${submitted ? "Proposal Submitted" : "Submit Demo Proposal"}</button>
+        <button class="btn ghost" onclick="returnToLastBuyer()">Return to Buyer Comparison</button>
+      </div>
+      ${submitted ? `<div class="isolation-note" style="margin-top:14px"><b>Submitted.</b> Proposal ${esc(submitted.id)} is ready for buyer-side AI comparison.</div>` : ""}
+    </div>
+  </div>`;
+}
+
+async function loadVendorFeed() {
+  const box = $("#vendorFeedResult");
+  if (!box) return;
+  if (sessionRole() !== "vendor") {
+    box.innerHTML = errorHTML("Sign in as a vendor to view the tender feed.");
+    return;
+  }
+  box.innerHTML = loaderHTML("Loading vendor feed...", "Fetching generated tenders, buyer BRI, shortlist context, and proposal status");
+  try {
+    const data = await fetch(`/api/tenders/feed?vendor_id=${encodeURIComponent(sessionAccountId())}`).then(r => r.json());
+    const tenders = data.tenders || [];
+    box.innerHTML = tenders.length
+      ? tenders.map(renderVendorTenderCard).join("")
+      : `<div class="empty-list">No generated tenders yet. Sign in as a buyer, draft a tender, then return here.</div>`;
+  } catch (e) {
+    box.innerHTML = errorHTML(e.message);
+  }
+}
+
+async function submitDemoProposal(tenderId) {
+  if (sessionRole() !== "vendor") return;
+  selectedVendorTenderId = tenderId;
+  const body = {
+    vendor_id: sessionAccountId(),
+    price_sar: Number(value(`#proposalPrice-${tenderId}`)) || null,
+    timeline_days: Number(value(`#proposalTimeline-${tenderId}`)) || null,
+    technical_summary: value(`#proposalTech-${tenderId}`),
+    commercial_summary: value(`#proposalCommercial-${tenderId}`),
+  };
+  const data = await fetch(`/api/tenders/${encodeURIComponent(tenderId)}/proposals`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).then(r => r.json());
+  await loadVendorFeed();
+  const target = $(`#tender-${tenderId}`);
+  if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+  return data;
+}
+
+function renderProposalComparisonCard(comparison) {
+  const tender = comparison.tender || {};
+  const ranking = comparison.ranking || [];
+  const rows = ranking.map(v => `<div class="vendor-card">
+    <div class="vc-head">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="rank-pill ${v.rank === 1 ? "rank-1" : ""}">#${esc(v.rank)}</div>
+        <div>
+          <div class="vc-name">${esc(v.vendor_name || v.vendor?.name || v.vendor_id)}</div>
+          <div class="hint" style="margin:0">VRI ${esc(v.vri)} / 100 - ${esc(v.vri_level)} - ${esc(v.proposal?.badge || "")}</div>
+        </div>
+      </div>
+      <div class="score-big">${esc(v.ai_recommendation_score)}</div>
+    </div>
+    <span class="badge ${riskBadgeClass(v.risk_level)} dot">risk: ${esc(v.risk_level)}</span>
+    <div class="bars">
+      ${barRow("AI Recommendation", v.ai_recommendation_score)}
+      ${barRow("Risk Score", v.risk_score)}
+      ${barRow("Probability of Success", v.probability_of_success)}
+      ${barRow("AI Tender Committee", v.committee?.final_score)}
+    </div>
+    <dl class="kv" style="margin-top:12px">
+      <dt>Proposal Price</dt><dd>${sar(v.proposal?.price_sar)}</dd>
+      <dt>Timeline</dt><dd>${esc(v.proposal?.timeline_days || "-")} days</dd>
+      <dt>Compliance Status</dt><dd>${esc(v.compliance_status || "-")}</dd>
+    </dl>
+    ${sub("AI Tender Committee", renderCommitteeAgents(v.committee))}
+    ${ul(v.why_selected)}
+  </div>`).join("");
+  return `<div class="section-block">
+    <div class="sb-head"><span class="num">C</span>${esc(tender.title || "Tender")} <span class="badge draft">${esc(tender.reference || "")}</span></div>
+    <div class="sb-body">
+      <div class="intel-panel">
+        <div class="intel-hero">
+          <div>
+            <div class="intel-eyebrow">Submitted Vendor Comparison</div>
+            <h2>${esc(comparison.recommended_vendor ? `${comparison.recommended_vendor.ai_recommendation_score}/100` : "No Bids")}</h2>
+            <p>${esc(comparison.human_in_the_loop || "AI recommends only. Buyer controls final approval and award.")}</p>
+          </div>
+          <span class="badge draft dot">Buyer decides</span>
+        </div>
+      </div>
+      ${rows || "<p class='empty'>No submitted vendor proposals for this tender yet.</p>"}
+    </div>
+  </div>`;
+}
+
+function renderCommitteeAgents(committee) {
+  const agents = committee?.agents || [];
+  if (!agents.length) return "<p class='empty'>Committee signals require buyer review.</p>";
+  return `<div class="committee-board">${agents.map(agent => `<div class="committee-card">
+    <div class="committee-card-head"><b>${esc(agent.agent)}</b><span class="score-pill">${esc(agent.score)}</span></div>
+    <p>${esc(agent.summary || "")}</p>
+  </div>`).join("")}</div>`;
+}
+
+async function loadBuyerProposalComparison() {
+  const box = $("#buyerProposalResult");
+  if (!box) return;
+  if (sessionRole() !== "buyer") {
+    box.innerHTML = errorHTML("Sign in as a buyer to compare submitted vendors.");
+    return;
+  }
+  box.innerHTML = loaderHTML("Comparing submitted vendors...", "Applying VRI, risk, probability of success, compliance, and AI committee signals");
+  try {
+    const data = await fetch(`/api/proposals/compare?buyer_id=${encodeURIComponent(sessionAccountId())}`).then(r => r.json());
+    const comparisons = data.comparisons || [];
+    box.innerHTML = comparisons.length
+      ? comparisons.map(renderProposalComparisonCard).join("")
+      : `<div class="empty-list">No tenders for this buyer yet. Generate a tender first, then submit as a vendor.</div>`;
+  } catch (e) {
+    box.innerHTML = errorHTML(e.message);
+  }
+}
+
+window.submitDemoProposal = submitDemoProposal;
+window.returnToLastBuyer = returnToLastBuyer;
+window.switchToVendorSandbox = switchToVendorSandbox;
+
 $("#refreshReputationBtn")?.addEventListener("click", loadReputationHub);
 $("#shortlistBtn")?.addEventListener("click", runVendorShortlist);
+$("#refreshVendorFeedBtn")?.addEventListener("click", loadVendorFeed);
+$("#refreshBuyerProposalsBtn")?.addEventListener("click", loadBuyerProposalComparison);
 
 $("#kbBtn").addEventListener("click", kbSearch);
 $("#kbQuery").addEventListener("keydown", e => { if (e.key === "Enter") kbSearch(); });
@@ -1442,6 +1739,7 @@ async function kbSearch() {
 
 // ── Boot: load metadata ──────────────────────────────────────────────────────────
 (async function init() {
+  restoreSession();
   buildDocChips();
   // Seed the activity poll position so old events aren't replayed on page load.
   try {

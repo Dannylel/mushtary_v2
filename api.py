@@ -16,6 +16,7 @@ from __future__ import annotations
 import threading
 import traceback
 import uuid
+import random
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -70,6 +71,8 @@ class Job(BaseModel):
 
 _JOBS: dict[str, Job] = {}
 _LOCK = threading.Lock()
+_TENDERS: dict[str, dict[str, Any]] = {}
+_PROPOSALS: dict[str, dict[str, Any]] = {}
 
 
 def _new_job(kind: str) -> Job:
@@ -117,6 +120,153 @@ def _format_date(value: Any) -> str | None:
     except Exception:
         pass
     return text
+
+
+def _buyer_for_tender(buyer_id: str | None, buyer_name: str | None = None) -> dict[str, Any]:
+    from agents.reputation import get_buyer, list_buyers
+
+    if buyer_id:
+        buyer = get_buyer(buyer_id)
+        if buyer:
+            return buyer
+    buyers = list_buyers()
+    if buyer_name:
+        match = next((b for b in buyers if b["name"].lower() == buyer_name.lower()), None)
+        if match:
+            return match
+    return buyers[0]
+
+
+def _shortlist_payload_from_form(form: dict[str, Any]) -> dict[str, Any]:
+    certs = form.get("required_certifications") or []
+    normalized_certs = [
+        item if isinstance(item, str) else item.get("name", "")
+        for item in certs
+    ]
+    return {
+        "category": form.get("category") or "Information Technology",
+        "subcategory": form.get("subcategory") or "IT Infrastructure & Data Centers",
+        "estimated_value_sar": form.get("estimated_value_sar") or 1_500_000,
+        "timeline_days": _duration_days(form.get("contract_duration")) or 90,
+        "required_certifications": [c for c in normalized_certs if c] or ["ISO 27001"],
+        "minimum_years_experience": form.get("minimum_years_experience") or 5,
+        "minimum_similar_projects": form.get("minimum_similar_projects") or 3,
+        "local_presence_required": bool(form.get("local_presence_required", True)),
+        "required_sector_license": form.get("required_sector_license") or None,
+    }
+
+
+def _duration_days(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+    import re
+
+    match = re.search(r"\d+", str(value))
+    return int(match.group(0)) if match else None
+
+
+def _published_tender_view(tender: dict[str, Any], include_artifact: bool = False) -> dict[str, Any]:
+    view = {k: v for k, v in tender.items() if include_artifact or k != "artifact"}
+    view["proposal_count"] = sum(1 for p in _PROPOSALS.values() if p["tender_id"] == tender["id"])
+    return view
+
+
+def _publish_tender_artifact(
+    artifact: dict[str, Any],
+    file_id: str,
+    template: str,
+    buyer_id: str | None = None,
+) -> dict[str, Any]:
+    from agents.reputation import shortlist_vendors
+
+    form = artifact.get("input_snapshot") or {}
+    output = artifact.get("output") or {}
+    meta = output.get("metadata") or {}
+    data_sheet = output.get("tender_data_sheet") or {}
+    buyer = _buyer_for_tender(buyer_id, form.get("buyer_name") or data_sheet.get("buyer_entity"))
+    payload = _shortlist_payload_from_form(form)
+    shortlist = shortlist_vendors(payload)
+    tender_id = file_id
+    tender = {
+        "id": tender_id,
+        "file_id": file_id,
+        "template": template,
+        "status": "draft_visible_to_vendors",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "buyer_id": buyer["account_id"],
+        "buyer": buyer,
+        "title": meta.get("title") or form.get("tender_title") or data_sheet.get("tender_title") or "Untitled Tender",
+        "reference": meta.get("tender_id") or form.get("tender_id") or data_sheet.get("tender_reference") or tender_id,
+        "category": form.get("category") or payload["category"],
+        "subcategory": form.get("subcategory") or payload["subcategory"],
+        "location": form.get("location") or data_sheet.get("location") or buyer.get("city"),
+        "submission_deadline": form.get("submission_deadline") or data_sheet.get("submission_deadline"),
+        "estimated_value_sar": form.get("estimated_value_sar"),
+        "budget_range": form.get("budget_range"),
+        "scope_of_work": form.get("scope_of_work") or "",
+        "required_certifications": payload["required_certifications"],
+        "minimum_years_experience": payload["minimum_years_experience"],
+        "minimum_similar_projects": payload["minimum_similar_projects"],
+        "evaluation_model": form.get("evaluation_model") or data_sheet.get("evaluation_model"),
+        "shortlist": shortlist,
+        "human_in_the_loop": "AI recommends only. Buyer controls final approval and award.",
+        "artifact": artifact,
+    }
+    with _LOCK:
+        _TENDERS[tender_id] = tender
+    return _published_tender_view(tender)
+
+
+def _proposal_comparison_for_tender(tender: dict[str, Any]) -> dict[str, Any]:
+    from agents.reputation import get_vendor
+
+    proposals = [p for p in _PROPOSALS.values() if p["tender_id"] == tender["id"]]
+    scored = {}
+    for bucket in (tender.get("shortlist", {}).get("buckets") or {}).values():
+        for vendor in bucket:
+            scored[vendor["vendor_id"]] = vendor
+    ranked = []
+    for proposal in proposals:
+        vendor = get_vendor(proposal["vendor_id"]) or {}
+        score = dict(scored.get(proposal["vendor_id"]) or {})
+        if not score:
+            score = {
+                "vendor_id": proposal["vendor_id"],
+                "vendor_name": vendor.get("name") or proposal["vendor_id"],
+                "vri": vendor.get("vri", {}).get("category_specific"),
+                "vri_level": vendor.get("vri", {}).get("level", "Under Review"),
+                "ai_recommendation_score": 58,
+                "fit_score": 58,
+                "risk_score": 62,
+                "probability_of_success": 61,
+                "compliance_status": "Buyer Review Required",
+                "risk_level": "Medium",
+                "committee": {"final_score": 58, "agents": []},
+                "why_selected": ["Submitted proposal requires manual buyer review because it was not pre-shortlisted."],
+            }
+        price = proposal.get("price_sar")
+        estimate = tender.get("estimated_value_sar")
+        if price and estimate:
+            ratio = price / estimate
+            if ratio < 0.7:
+                score["risk_level"] = "High"
+                score["risk_score"] = min(score.get("risk_score") or 60, 55)
+                score["why_selected"] = (score.get("why_selected") or []) + ["Commercial proposal is unusually low compared with the tender estimate."]
+            elif ratio <= 1.05:
+                score["ai_recommendation_score"] = min(100, round((score.get("ai_recommendation_score") or 0) + 2, 1))
+        score["proposal"] = proposal
+        score["vendor"] = vendor
+        ranked.append(score)
+    ranked.sort(key=lambda item: item.get("ai_recommendation_score") or 0, reverse=True)
+    for rank, item in enumerate(ranked, start=1):
+        item["rank"] = rank
+    return {
+        "tender": _published_tender_view(tender),
+        "submitted_vendor_count": len(ranked),
+        "recommended_vendor": ranked[0] if ranked else None,
+        "ranking": ranked,
+        "human_in_the_loop": "AI recommends only. Buyer controls final approval and award.",
+    }
 
 
 def _apply_form_overrides(form, overrides: dict | None):
@@ -180,7 +330,14 @@ def _apply_form_overrides(form, overrides: dict | None):
     return TenderBuyerForm.model_validate(data)
 
 
-def _job_full_draft(seed: str | None, sow_path: str | None, sow_text: str | None = None, template: str | None = None, form_overrides: dict | None = None) -> dict:
+def _job_full_draft(
+    seed: str | None,
+    sow_path: str | None,
+    sow_text: str | None = None,
+    template: str | None = None,
+    form_overrides: dict | None = None,
+    buyer_id: str | None = None,
+) -> dict:
     """Run the full LangGraph pipeline and render the PDF. Returns artifact + file ids."""
     from agents.graph.modes import run_mode
     from pdf_renderer import build_pdf, normalize_template
@@ -215,8 +372,9 @@ def _job_full_draft(seed: str | None, sow_path: str | None, sow_text: str | None
                          encoding="utf-8")
     build_pdf(artifact, pdf_path, template=template)
     build_pdf(artifact, default_pdf_path, template=template)
+    published_tender = _publish_tender_artifact(artifact, fid, template, buyer_id)
 
-    return {"artifact": artifact, "file_id": fid, "template": template}
+    return {"artifact": artifact, "file_id": fid, "template": template, "published_tender": published_tender}
 
 
 def _job_form(seed: str | None) -> dict:
@@ -450,6 +608,7 @@ class SeedReq(BaseModel):
     seed: str | None = None
     template: str | None = None
     form_overrides: dict[str, Any] | None = None
+    buyer_id: str | None = None
 
 
 class GuidedDraftReq(BaseModel):
@@ -457,6 +616,7 @@ class GuidedDraftReq(BaseModel):
     scope_text: str
     template: str | None = None
     form_overrides: dict[str, Any] | None = None
+    buyer_id: str | None = None
 
 
 class SowReviewReq(BaseModel):
@@ -491,12 +651,24 @@ class VendorShortlistReq(BaseModel):
     required_sector_license: str | None = None
 
 
+class RandomSessionReq(BaseModel):
+    role: str
+
+
+class ProposalReq(BaseModel):
+    vendor_id: str
+    price_sar: float | None = None
+    timeline_days: int | None = None
+    technical_summary: str = ""
+    commercial_summary: str = ""
+
+
 # ── API: job-launching endpoints ─────────────────────────────────────────────────
 
 @app.post("/api/jobs/draft")
 def start_draft(req: SeedReq):
     job = _new_job("draft")
-    _run_async(job, _job_full_draft, req.seed or None, None, None, req.template, req.form_overrides)
+    _run_async(job, _job_full_draft, req.seed or None, None, None, req.template, req.form_overrides, req.buyer_id)
     return {"job_id": job.id}
 
 
@@ -507,7 +679,7 @@ def start_guided_draft(req: GuidedDraftReq):
         f"Scope of Work:\n{req.scope_text.strip()}"
     )
     job = _new_job("guided draft")
-    _run_async(job, _job_full_draft, req.project_name.strip() or None, None, scope_text, req.template, req.form_overrides)
+    _run_async(job, _job_full_draft, req.project_name.strip() or None, None, scope_text, req.template, req.form_overrides, req.buyer_id)
     return {"job_id": job.id}
 
 
@@ -519,7 +691,12 @@ def start_sow_review(req: SowReviewReq):
 
 
 @app.post("/api/jobs/draft-sow")
-async def start_draft_sow(file: UploadFile = File(...), template: str | None = Form(None), form_overrides: str | None = Form(None)):
+async def start_draft_sow(
+    file: UploadFile = File(...),
+    template: str | None = Form(None),
+    form_overrides: str | None = Form(None),
+    buyer_id: str | None = Form(None),
+):
     path = UPLOADS / f"{uuid.uuid4().hex[:8]}_{file.filename}"
     path.write_bytes(await file.read())
     overrides = None
@@ -527,7 +704,7 @@ async def start_draft_sow(file: UploadFile = File(...), template: str | None = F
         import json as _json
         overrides = _json.loads(form_overrides)
     job = _new_job("draft")
-    _run_async(job, _job_full_draft, None, str(path), None, template, overrides)
+    _run_async(job, _job_full_draft, None, str(path), None, template, overrides, buyer_id)
     return {"job_id": job.id}
 
 
@@ -639,6 +816,102 @@ def kb_search(q: str, k: int = 5):
              "text": h.text}
             for h in hits
         ],
+    }
+
+
+@app.post("/api/session/random")
+def random_session(req: RandomSessionReq):
+    from agents.reputation import list_buyers, list_vendors
+
+    role = req.role.strip().lower()
+    if role not in {"buyer", "vendor"}:
+        raise HTTPException(400, "role must be buyer or vendor")
+    accounts = list_buyers() if role == "buyer" else list_vendors()
+    account = random.choice(accounts)
+    session = {
+        "role": role,
+        "account": account,
+        "signed_in_at": datetime.now(timezone.utc).isoformat(),
+        "mode": "random_demo_account",
+    }
+    if role == "buyer":
+        session["current_tender_id"] = f"TND-{account['account_id'].replace('BUY-', 'BUY')}-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:4].upper()}"
+    return {
+        "session": session
+    }
+
+
+@app.get("/api/tenders/feed")
+def tender_feed(vendor_id: str | None = None):
+    tenders = [_published_tender_view(t) for t in _TENDERS.values()]
+    tenders.sort(key=lambda item: item["created_at"], reverse=True)
+    if vendor_id:
+        for tender in tenders:
+            ranked = tender.get("shortlist", {}).get("top_three") or []
+            tender["recommended_to_current_vendor"] = any(v.get("vendor_id") == vendor_id for v in ranked)
+            tender["current_vendor_rank"] = next((v.get("rank") for v in ranked if v.get("vendor_id") == vendor_id), None)
+            tender["current_vendor_proposal"] = next(
+                (p for p in _PROPOSALS.values() if p["tender_id"] == tender["id"] and p["vendor_id"] == vendor_id),
+                None,
+            )
+    return {"tenders": tenders}
+
+
+@app.get("/api/tenders/{tender_id}")
+def tender_detail(tender_id: str):
+    tender = _TENDERS.get(tender_id)
+    if not tender:
+        raise HTTPException(404, "tender not found")
+    return {"tender": _published_tender_view(tender, include_artifact=True)}
+
+
+@app.post("/api/tenders/{tender_id}/proposals")
+def submit_proposal(tender_id: str, req: ProposalReq):
+    from agents.reputation import get_vendor
+
+    tender = _TENDERS.get(tender_id)
+    if not tender:
+        raise HTTPException(404, "tender not found")
+    vendor = get_vendor(req.vendor_id)
+    if not vendor:
+        raise HTTPException(404, "vendor not found")
+    proposal_id = f"PRP-{uuid.uuid4().hex[:10].upper()}"
+    proposal = {
+        "id": proposal_id,
+        "tender_id": tender_id,
+        "vendor_id": req.vendor_id,
+        "vendor_name": vendor["name"],
+        "submitted_at": datetime.now(timezone.utc).isoformat(),
+        "status": "submitted_demo",
+        "price_sar": req.price_sar,
+        "timeline_days": req.timeline_days,
+        "technical_summary": req.technical_summary.strip(),
+        "commercial_summary": req.commercial_summary.strip(),
+        "vri": vendor["vri"]["category_specific"],
+        "vri_level": vendor["vri"]["level"],
+        "badge": vendor["badge"],
+    }
+    with _LOCK:
+        _PROPOSALS[proposal_id] = proposal
+    return {
+        "proposal": proposal,
+        "comparison": _proposal_comparison_for_tender(tender),
+        "human_in_the_loop": "AI recommends only. Buyer controls final approval and award.",
+    }
+
+
+@app.get("/api/proposals/compare")
+def compare_submitted_proposals(buyer_id: str | None = None):
+    tenders = list(_TENDERS.values())
+    if buyer_id:
+        tenders = [tender for tender in tenders if tender.get("buyer_id") == buyer_id]
+    comparisons = [
+        _proposal_comparison_for_tender(tender)
+        for tender in sorted(tenders, key=lambda item: item["created_at"], reverse=True)
+    ]
+    return {
+        "comparisons": comparisons,
+        "human_in_the_loop": "AI recommends only. Buyer controls final approval and award.",
     }
 
 
