@@ -16,12 +16,13 @@ from fpdf.enums import XPos, YPos
 OUTPUT_PDF = Path("outputs") / "tender_draft.pdf"
 DEFAULT_LOGO_PATH = Path("assets") / "buyer_logo.png"
 RESORT_BACKGROUND_PATH = Path("Generated image_ Tropical resort icons and hospitality theme.png")
+COVER_BACKGROUND_PATH = Path("image.png")
 PDF_FONT = "Helvetica"
 PDF_TEMPLATES = {
     "premium_bw": "Premium B/W",
     "modern_bw": "Modern B/W",
 }
-DEFAULT_TEMPLATE = "premium_bw"
+DEFAULT_TEMPLATE = "modern_bw"
 SAUDI_GREEN = (0, 108, 53)
 SAUDI_GREEN_DARK = (0, 83, 85)
 SAUDI_GREEN_MID = (42, 139, 86)
@@ -176,6 +177,17 @@ def _draw_resort_background(pdf: FPDF) -> bool:
         return False
 
 
+def _draw_cover_background(pdf: FPDF) -> bool:
+    if not COVER_BACKGROUND_PATH.exists():
+        return False
+
+    try:
+        pdf.image(str(COVER_BACKGROUND_PATH), x=0, y=0, w=pdf.w, h=pdf.h)
+        return True
+    except Exception:
+        return False
+
+
 def normalize_template(template: str | None) -> str:
     return template if template in PDF_TEMPLATES else DEFAULT_TEMPLATE
 
@@ -193,23 +205,36 @@ def _draw_ai_draft_watermark(pdf: FPDF):
         return
 
     x = pdf.l_margin
-    y = 8.2
-    w = 51
-    h = 7.6
+    # Vertically center the badge on the header logo (logo spans y=10..22, center 16).
+    h = 8.4
+    y = 16 - h / 2
+    accent_w = 1.8
+    pad_left = 3.0
+    pad_right = 3.0
+
+    # Size the box to the widest line of text so the border hugs the content.
+    pdf.set_font(_font(pdf), "B", 6.1)
+    line1_w = pdf.get_string_width(_safe_text("AI DRAFT"))
+    pdf.set_font(_font(pdf), "", 5.1)
+    line2_w = pdf.get_string_width(_safe_text("Pending buyer approval"))
+    w = accent_w + pad_left + max(line1_w, line2_w) + pad_right
+
     pdf.set_fill_color(255, 255, 255)
     pdf.set_draw_color(214, 230, 222)
     pdf.set_line_width(0.16)
     pdf.rect(x, y, w, h, style="DF")
     pdf.set_fill_color(*SAUDI_GREEN)
-    pdf.rect(x, y, 1.8, h, style="F")
-    pdf.set_xy(x + 4.2, y + 1.2)
+    pdf.rect(x, y, accent_w, h, style="F")
+
+    text_x = x + accent_w + pad_left
+    pdf.set_xy(text_x, y + 1.5)
     pdf.set_text_color(*SAUDI_GREEN_DARK)
     pdf.set_font(_font(pdf), "B", 6.1)
-    pdf.cell(18, 2.8, _safe_text("AI DRAFT"), align="L")
-    pdf.set_xy(x + 4.2, y + 4.1)
+    pdf.cell(line1_w, 2.8, _safe_text("AI DRAFT"), align="L")
+    pdf.set_xy(text_x, y + 4.6)
     pdf.set_text_color(86, 108, 96)
     pdf.set_font(_font(pdf), "", 5.1)
-    pdf.cell(w - 7, 2.4, _safe_text("Pending buyer approval"), align="L")
+    pdf.cell(line2_w, 2.4, _safe_text("Pending buyer approval"), align="L")
     pdf.set_text_color(0, 0, 0)
 
 
@@ -372,6 +397,36 @@ def _draw_simple_icon(pdf: FPDF, x: float, y: float, kind: int, scale: float = 1
         pdf.line(x + 1, y + s, x + s - 1, y + s)
 
 
+def _draw_brand_logo_lockup(pdf: FPDF, x: float, y: float, *, light: bool = False):
+    """The 'EP / EVOLVED PROCUREMENT' logo mark used in the header, reused on full-bleed pages."""
+    mark_size = 12
+    ring_color = (255, 255, 255) if light else SAUDI_GREEN_LIGHT
+    mark_text_color = (255, 255, 255) if light else SAUDI_GREEN_DARK
+    title_color = (255, 255, 255) if light else SAUDI_GREEN_DARK
+    subtitle_color = (221, 244, 234) if light else SAUDI_GREEN_MID
+
+    pdf.set_draw_color(*ring_color)
+    pdf.set_line_width(0.22)
+    pdf.ellipse(x, y, mark_size, mark_size)
+    pdf.set_draw_color(*SAUDI_GREEN)
+    pdf.line(x + 3.2, y + 6.2, x + mark_size - 3.2, y + 6.2)
+    pdf.line(x + 6.2, y + 3.2, x + 6.2, y + mark_size - 3.2)
+    pdf.set_xy(x + 2.6, y + 4.3)
+    pdf.set_text_color(*mark_text_color)
+    pdf.set_font(PDF_FONT, "B", 4.8)
+    pdf.cell(mark_size - 5.2, 3.2, _safe_text("EP"), align="C")
+
+    pdf.set_xy(x + mark_size + 3, y + 1.2)
+    pdf.set_font(PDF_FONT, "B", 7.2)
+    pdf.set_text_color(*title_color)
+    pdf.cell(25, 4, _safe_text("EVOLVED"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.set_x(x + mark_size + 3)
+    pdf.set_font(PDF_FONT, "", 4.8)
+    pdf.set_text_color(*subtitle_color)
+    pdf.cell(25, 3.2, _safe_text("PROCUREMENT"), align="L")
+    pdf.set_text_color(0, 0, 0)
+
+
 def _write_thank_you_page(pdf: FPDF):
     pdf.add_page()
     pdf.full_bleed_pages.add(pdf.page_no())
@@ -409,12 +464,7 @@ def _write_thank_you_page(pdf: FPDF):
     pdf.set_font(_font(pdf), "B", 18)
     pdf.cell(0, 8, _safe_text("sca.sa"))
 
-    pdf.set_xy(22, 258)
-    pdf.set_font(_font(pdf), "B", 23)
-    pdf.cell(0, 10, _safe_text("SCA"))
-    pdf.set_font(_font(pdf), "", 10)
-    pdf.set_xy(22, 270)
-    pdf.multi_cell(92, 5, _safe_text("Saudi Contractors Authority"))
+    _draw_brand_logo_lockup(pdf, 22, 258, light=True)
     pdf.set_text_color(0, 0, 0)
 
 
@@ -567,14 +617,16 @@ def _write_section(pdf: TenderPDF, title: str):
         pdf.set_x(pdf.l_margin)
         return
 
-    number, label = _split_numbered_title(title)
     x = pdf.l_margin
     y = pdf.get_y()
     w = pdf.w - pdf.l_margin - pdf.r_margin
-    block_w = 17 if number else 5
-    title_x = x + block_w + 4
-    title_w = w - block_w - 4
-    label_lines = _estimate_lines(label, 54)
+    # Left-align exactly like the subheader: render the full title as one string
+    # starting right next to the green accent bar (same x offset as _write_subsection).
+    accent_w = 3
+    title_x = x + 3.5 + (accent_w - 1.6)  # match subheader's text-to-bar gap
+    heading = _safe_text(title).upper()
+    title_w = w - (title_x - x) - 4
+    label_lines = _estimate_lines(heading, 54)
     band_h = max(14, min(25, label_lines * 5.8 + 6))
 
     _ensure_space(pdf, band_h + 5)
@@ -584,18 +636,12 @@ def _write_section(pdf: TenderPDF, title: str):
     pdf.set_line_width(0.12)
     pdf.rect(x, y, w, band_h, style="DF")
     pdf.set_fill_color(*SAUDI_GREEN)
-    pdf.rect(x, y, 3, band_h, style="F")
-
-    if number:
-        pdf.set_xy(x + 4.5, y + 3.8)
-        pdf.set_text_color(*SAUDI_GREEN_DARK)
-        pdf.set_font(_font(pdf), "B", 14)
-        pdf.cell(block_w - 5, 5.6, _safe_text(number), align="L")
+    pdf.rect(x, y, accent_w, band_h, style="F")
 
     pdf.set_xy(title_x, y + 3.2)
     pdf.set_text_color(*SAUDI_GREEN_DARK)
     pdf.set_font(_font(pdf), "B", 12.2)
-    pdf.multi_cell(title_w, 5.8, _safe_text(label.upper()))
+    pdf.multi_cell(title_w, 5.8, heading)
     pdf.set_y(y + band_h + 3)
     pdf.set_text_color(0, 0, 0)
     pdf.set_x(pdf.l_margin)
@@ -629,7 +675,7 @@ def _write_subsection(pdf: TenderPDF, title: str):
         pdf.rect(x, y, w, 8.8, style="DF")
         pdf.set_fill_color(*SAUDI_GREEN)
         pdf.rect(x, y, 1.6, 8.8, style="F")
-        pdf.set_xy(x + 5, y + 2)
+        pdf.set_xy(x + 3.5, y + 2)
         pdf.set_font(_font(pdf), "B", 9.4)
         pdf.set_text_color(*SAUDI_GREEN_DARK)
         pdf.multi_cell(w - 10, 4.5, _safe_text(title))
@@ -1091,6 +1137,30 @@ def _write_tender_data_sheet_page(pdf: TenderPDF, tender_data_sheet: dict):
     )
 
 
+def _write_document_bullets(pdf: TenderPDF, title: str, docs: list[Any]):
+    """Compact bullet list of document names (with a short inline detail) to save space."""
+    if not docs:
+        return
+
+    items = []
+    for doc in _as_list(docs):
+        d = _as_dict(doc)
+        name = _safe_text(d.get("name", "")).strip()
+        if not name:
+            continue
+        applicability = _safe_text(d.get("applicability", "")).strip()
+        if applicability:
+            items.append(f"{name} ({applicability})")
+        else:
+            items.append(name)
+
+    if not items:
+        return
+
+    _write_subsection(pdf, title)
+    _write_bullets(pdf, items)
+
+
 def _write_document_table(pdf: TenderPDF, title: str, docs: list[Any]):
     if not docs:
         return
@@ -1187,79 +1257,6 @@ def _write_document_table(pdf: TenderPDF, title: str, docs: list[Any]):
     pdf.ln(1)
 
 
-def _write_deliverable_item(pdf: TenderPDF, item: dict, index: int):
-    name = item.get("name", "")
-    fmt = item.get("format", "")
-    deadline = item.get("deadline_note", "")
-    description = item.get("description", "")
-
-    if _is_modern(pdf):
-        w = pdf.w - pdf.l_margin - pdf.r_margin
-        meta = " | ".join(part for part in [f"Format: {fmt}" if fmt else "", f"Deadline: {deadline}" if deadline else ""] if part)
-        title_h = max(8.8, min(18, _estimate_lines(name, 72) * 4.3 + 4.5))
-        meta_h = max(0, min(10, _estimate_lines(meta, 90) * 3.8 + 1)) if meta else 0
-        desc_h = max(0, min(28, _estimate_lines(description, 92) * 4 + 1)) if description else 0
-        row_h = title_h + meta_h + desc_h + (4 if meta or description else 0)
-        _ensure_space(pdf, row_h + 4)
-        x = pdf.l_margin
-        y = pdf.get_y()
-
-        pdf.set_fill_color(*SAUDI_GREEN_PALE)
-        pdf.set_draw_color(*SAUDI_GREEN_LIGHT)
-        pdf.set_line_width(0.12)
-        pdf.rect(x, y, w, title_h, style="DF")
-        pdf.set_fill_color(*SAUDI_GREEN)
-        pdf.rect(x, y, 1.8, title_h, style="F")
-        pdf.set_xy(x + 5, y + 2.3)
-        pdf.set_text_color(*SAUDI_GREEN_MID)
-        pdf.set_font(_font(pdf), "B", 7.8)
-        pdf.cell(10, 3.8, f"{index:02d}", align="L")
-
-        pdf.set_xy(x + 16, y + 2.2)
-        pdf.set_text_color(*SAUDI_GREEN_DARK)
-        pdf.set_font(_font(pdf), "B", 9.2)
-        pdf.multi_cell(w - 20, 4.3, _safe_text(name))
-
-        body_y = y + title_h + 2
-        if meta:
-            pdf.set_xy(x, body_y)
-            pdf.set_text_color(*SAUDI_GREEN_DARK)
-            pdf.set_font(_font(pdf), "B", 8)
-            pdf.multi_cell(w, 3.8, _safe_text(meta))
-            body_y = pdf.get_y() + 0.5
-
-        if description:
-            pdf.set_xy(x, body_y)
-            pdf.set_text_color(35, 75, 54)
-            pdf.set_font(_font(pdf), "", 8.5)
-            pdf.multi_cell(w, 4, _safe_text(description))
-
-        pdf.set_y(y + row_h + 3)
-        pdf.set_text_color(0, 0, 0)
-        pdf.set_x(pdf.l_margin)
-        return
-
-    _ensure_space(pdf, 14)
-    pdf.set_x(pdf.l_margin)
-    pdf.set_font(PDF_FONT, "B", 10)
-    pdf.multi_cell(0, 5.5, _safe_text(name))
-
-    pdf.set_x(pdf.l_margin)
-    pdf.set_font(PDF_FONT, "", 9)
-
-    if fmt:
-        _ensure_space(pdf, 8)
-        pdf.set_x(pdf.l_margin)
-        pdf.multi_cell(0, 5, _safe_text(f"Format: {fmt}"))
-
-    if deadline:
-        _ensure_space(pdf, 8)
-        pdf.set_x(pdf.l_margin)
-        pdf.multi_cell(0, 5, _safe_text(f"Deadline: {deadline}"))
-
-    _write_para(pdf, description)
-
-
 def _write_cover_page(pdf: TenderPDF, d: dict, metadata: dict, tender_data_sheet: dict, intelligence: dict):
     status = "DRAFT - PENDING BUYER APPROVAL"
     generated_at = intelligence.get("generated_at") or datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
@@ -1267,8 +1264,8 @@ def _write_cover_page(pdf: TenderPDF, d: dict, metadata: dict, tender_data_sheet
     tender_title = metadata.get("title") or tender_data_sheet.get("tender_title") or "Tender Draft"
     logo_path = _logo_path(metadata, tender_data_sheet)
 
-    has_resort_background = _draw_resort_background(pdf)
-    if not has_resort_background:
+    has_cover_background = _draw_cover_background(pdf)
+    if not has_cover_background:
         pdf.set_fill_color(255, 255, 255)
         pdf.rect(0, 0, pdf.w, pdf.h, style="F")
 
@@ -1277,7 +1274,7 @@ def _write_cover_page(pdf: TenderPDF, d: dict, metadata: dict, tender_data_sheet
     width = right - left
 
     if pdf.template == "modern_bw":
-        if not has_resort_background:
+        if not has_cover_background:
             _draw_architecture_background(pdf)
         _draw_ai_draft_watermark(pdf)
 
@@ -1297,6 +1294,8 @@ def _write_cover_page(pdf: TenderPDF, d: dict, metadata: dict, tender_data_sheet
         _cover_info_row(pdf, "Issue Date", issue_date, info_x, info_y + 30, info_w)
         _cover_info_row(pdf, "Publisher", "Procurement Department", info_x, info_y + 45, info_w)
         _cover_info_row(pdf, "Copyright", "Saudi Contractors Authority", info_x, info_y + 60, info_w)
+
+        _draw_brand_logo_lockup(pdf, 18, 243, light=True)
 
         pdf.set_xy(18, 262)
         pdf.set_font(_font(pdf), "", 8.2)
@@ -1484,15 +1483,17 @@ def _write_toc(pdf: TenderPDF):
                 row_y = pdf.get_y()
                 pdf.set_draw_color(*SAUDI_GREEN_LIGHT)
                 pdf.set_line_width(0.08)
-                pdf.line(x + 9, row_y + 7.2, x + w, row_y + 7.2)
-                pdf.set_xy(x + 12, row_y + 2)
+                pdf.line(x + 5, row_y + 7.2, x + w, row_y + 7.2)
+                pdf.set_xy(x + 5, row_y + 2)
                 pdf.set_text_color(*SAUDI_GREEN_MID)
                 pdf.set_font(_font(pdf), "B", 8.4)
-                pdf.cell(8.5, 3.8, _safe_text(f"{group_index}.{item_index}"))
-                pdf.set_xy(x + 22.5, row_y + 2)
+                number_text = f"{group_index}.{item_index}"
+                number_w = pdf.get_string_width(_safe_text(number_text)) + 2.5
+                pdf.cell(number_w, 3.8, _safe_text(number_text))
+                pdf.set_xy(x + 5 + number_w, row_y + 2)
                 pdf.set_text_color(24, 52, 38)
                 pdf.set_font(_font(pdf), "", 8.8)
-                pdf.cell(w - 25.5, 3.8, _safe_text(item))
+                pdf.cell(w - 5 - number_w, 3.8, _safe_text(item))
                 pdf.set_y(row_y + 7.4)
 
             pdf.ln(3.5)
@@ -1681,10 +1682,10 @@ def build_pdf(draft: Any, output_path: Path = OUTPUT_PDF, template: str | None =
     )
     _write_bullet_subsection(pdf, "2.1.1 Document Governance Rules", award.get("vendor_document_rules", []))
     _write_bullet_subsection(pdf, "2.1.2 Documents Required for this Tender", award.get("statutory_documents_required", []))
-    _write_document_table(pdf, "2.1.3 Mandatory Documents", award.get("mandatory_documents", []))
-    _write_document_table(pdf, "2.1.4 Mandatory-if-Applicable / Conditional Documents", award.get("conditional_documents", []))
-    _write_document_table(pdf, "2.1.5 IT Sector-Specific Documents", award.get("sector_specific_documents", []))
-    _write_document_table(pdf, "2.1.6 Optional Capability and Credibility Documents", award.get("optional_documents", []))
+    _write_document_bullets(pdf, "2.1.3 Mandatory Documents", award.get("mandatory_documents", []))
+    _write_document_bullets(pdf, "2.1.4 Mandatory-if-Applicable / Conditional Documents", award.get("conditional_documents", []))
+    _write_document_bullets(pdf, "2.1.5 IT Sector-Specific Documents", award.get("sector_specific_documents", []))
+    _write_document_bullets(pdf, "2.1.6 Optional Capability and Credibility Documents", award.get("optional_documents", []))
 
     pdf.add_page()
 
@@ -1758,10 +1759,20 @@ def build_pdf(draft: Any, output_path: Path = OUTPUT_PDF, template: str | None =
     _write_section(pdf, "3.4 Deliverables")
     _write_bullet_subsection(pdf, "3.4.1 Work Order Process", deliverables.get("work_order_process", []))
 
-    _write_subsection(pdf, "3.4.2 Required Deliverables")
-    for index, item in enumerate(deliverables.get("deliverables", []), start=1):
-        it = _as_dict(item)
-        _write_deliverable_item(pdf, it, index)
+    _write_matrix_table(
+        pdf,
+        "3.4.2 Required Deliverables",
+        ["#", "Deliverable", "Format", "Deadline"],
+        [
+            [
+                f"{index:02d}",
+                _as_dict(it).get("name", ""),
+                _as_dict(it).get("format", "") or "-",
+                _as_dict(it).get("deadline_note", "") or "-",
+            ]
+            for index, it in enumerate(deliverables.get("deliverables", []), start=1)
+        ],
+    )
 
     _write_subsection(pdf, "3.4.3 Approval Process")
     _write_para(pdf, deliverables.get("approval_process", ""))
@@ -1886,7 +1897,7 @@ def build_pdf(draft: Any, output_path: Path = OUTPUT_PDF, template: str | None =
 
     pdf.add_page()
 
-    _write_section(pdf, "4.6 Buyer Approval")
+    _write_section(pdf, "4.6 Document Control")
     _write_para(pdf, "PENDING BUYER APPROVAL - This tender cannot be published until approved by the authorized Buyer-Admin.")
     _write_key_value_table(
         pdf,
