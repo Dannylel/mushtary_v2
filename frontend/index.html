@@ -439,15 +439,19 @@
       <section class="view" id="view-reputation">
         <header class="page-head">
           <h1>Reputation Hub</h1>
-          <p>Demo buyer and vendor accounts with VRI, BRI, badges, shortlisting, and AI committee decision support.</p>
+          <p>Demo buyer and vendor accounts with VRI, BRI, badges, and tender-specific vendor validation.</p>
         </header>
         <div class="panel">
           <div id="reputationSnapshot"></div>
+          <div class="field-block" style="margin-top:16px">
+            <label class="field-label" for="validationTenderSelect">Drafted tender to validate</label>
+            <select id="validationTenderSelect" class="input" disabled><option>Open as buyer to load drafted tenders</option></select>
+          </div>
           <div class="toolbar" style="margin-top:16px">
-            <button id="shortlistBtn" class="btn primary">Run Shortlist From Current Tender</button>
+            <button id="shortlistBtn" class="btn primary" disabled>Validate Vendors Against Selected Tender</button>
             <button id="refreshReputationBtn" class="btn ghost">Refresh Accounts</button>
           </div>
-          <div class="hint">Uses the Draft Tender category, budget, certifications, years of experience, and similar-project inputs.</div>
+          <div class="hint">Vendor validation is available only after a tender has been drafted and saved. It uses the selected tender’s stored category, requirements, budget, certifications, and experience thresholds.</div>
         </div>
         <div id="shortlistResult"></div>
         <div id="reputationAccounts"></div>

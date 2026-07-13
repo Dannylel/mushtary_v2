@@ -1172,6 +1172,31 @@ def tender_detail(tender_id: str):
     return {"tender": _published_tender_view(tender, include_artifact=True)}
 
 
+@app.post("/api/tenders/{tender_id}/validate-vendors")
+def validate_vendors_for_saved_tender(tender_id: str, buyer_id: str | None = None):
+    """Validate vendors only against a tender that the buyer has already drafted."""
+    from agents.marketplace_store import get_tender
+    from agents.reputation import shortlist_vendors
+
+    record = get_tender(tender_id)
+    if not record:
+        raise HTTPException(404, "Drafted tender not found")
+    if buyer_id and record.get("buyer_id") and record["buyer_id"] != buyer_id:
+        raise HTTPException(403, "Only the tender's Buyer-Admin can validate vendors against it")
+    artifact = record.get("artifact") or {}
+    form = artifact.get("input_snapshot") or {}
+    if not form:
+        raise HTTPException(409, "This saved tender has no requirements available for vendor validation")
+    shortlist = shortlist_vendors(_shortlist_payload_from_form(form))
+    shortlist["validated_tender"] = {
+        "id": tender_id,
+        "title": record.get("title") or form.get("tender_title") or "Tender Draft",
+        "reference": record.get("reference") or form.get("tender_id"),
+        "status": record.get("status"),
+    }
+    return shortlist
+
+
 @app.post("/api/tenders/{tender_id}/proposals")
 def submit_proposal(tender_id: str, req: ProposalReq):
     from agents.reputation import get_vendor

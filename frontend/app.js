@@ -323,6 +323,7 @@ function show(view) {
   window.scrollTo({ top: 0 });
   if (view === "vendor-feed") loadVendorFeed();
   if (view === "draft") loadSavedTenders();
+  if (view === "reputation") { loadReputationHub(); loadTenderValidationPicker(); }
   if (view === "buyer-proposals") loadBuyerProposalComparison();
 }
 $$(".nav-item").forEach(b => b.addEventListener("click", () => show(b.dataset.view)));
@@ -1599,30 +1600,45 @@ async function loadReputationHub() {
   }
 }
 
-function shortlistPayloadFromDraft() {
-  const d = collectDraftOverrides();
-  return {
-    category: d.category || "Information Technology",
-    subcategory: d.subcategory || "IT Infrastructure & Data Centers",
-    estimated_value_sar: d.estimated_value_sar || 1500000,
-    timeline_days: 90,
-    required_certifications: d.required_certifications || ["ISO 27001"],
-    minimum_years_experience: d.minimum_years_experience || 5,
-    minimum_similar_projects: d.minimum_similar_projects || 3,
-    local_presence_required: !!d.local_presence_required,
-    required_sector_license: d.required_sector_license || null,
-  };
+async function loadTenderValidationPicker() {
+  const select = $("#validationTenderSelect");
+  const button = $("#shortlistBtn");
+  if (!select || !button) return;
+  if (sessionRole() !== "buyer") {
+    select.innerHTML = "<option>Sign in as buyer to validate vendors</option>";
+    select.disabled = true; button.disabled = true;
+    return;
+  }
+  select.disabled = true; button.disabled = true;
+  select.innerHTML = "<option>Loading drafted tenders...</option>";
+  try {
+    const data = await fetch(`/api/tenders/saved?buyer_id=${encodeURIComponent(sessionAccountId())}`).then(r => r.json());
+    const tenders = data.tenders || [];
+    if (!tenders.length) {
+      select.innerHTML = "<option>No drafted tenders yet — create one first</option>";
+      return;
+    }
+    select.innerHTML = tenders.map(t => `<option value="${esc(t.id)}">${esc(t.title)} · ${esc(t.reference || "No reference")} · ${esc(t.publication_status)}</option>`).join("");
+    select.disabled = false; button.disabled = false;
+  } catch (error) {
+    select.innerHTML = "<option>Could not load drafted tenders</option>";
+  }
 }
 
 async function runVendorShortlist() {
   const box = $("#shortlistResult");
+  const tenderId = value("#validationTenderSelect");
+  if (!tenderId || sessionRole() !== "buyer") {
+    box.innerHTML = errorHTML("Draft a tender first, then select it here before validating vendors.");
+    return;
+  }
   box.innerHTML = loaderHTML("Shortlisting vendors...", "Calculating VRI, requirement match, proposal quality, price, risk, and committee scores");
   try {
-    const data = await fetch("/api/intelligence/shortlist", {
+    const response = await fetch(`/api/tenders/${encodeURIComponent(tenderId)}/validate-vendors?buyer_id=${encodeURIComponent(sessionAccountId())}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(shortlistPayloadFromDraft()),
-    }).then(r => r.json());
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Could not validate vendors for this tender.");
     box.innerHTML = renderShortlist(data);
     box.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (e) {
@@ -1632,6 +1648,7 @@ async function runVendorShortlist() {
 
 function renderShortlist(result) {
   const counts = result.counts || {};
+  const validatedTender = result.validated_tender || {};
   const reco = result.top_recommendation;
   const committee = result.committee || {};
   const layer = result.ai_recommendation_layer || {};
@@ -1644,7 +1661,7 @@ function renderShortlist(result) {
         <div>
           <div class="intel-eyebrow">AI Vendor Selection Engine</div>
           <h2>${esc(reco ? `${reco.ai_recommendation_score}/100` : "No Match")}</h2>
-          <p>${esc(committee.final_recommendation || result.human_in_the_loop || "")}</p>
+          <p>${esc(validatedTender.title ? `Validated against: ${validatedTender.title}${validatedTender.reference ? ` (${validatedTender.reference})` : ""}. ` : "")}${esc(committee.final_recommendation || result.human_in_the_loop || "")}</p>
         </div>
         <span class="badge draft dot">Advisory - Buyer decides</span>
       </div>
