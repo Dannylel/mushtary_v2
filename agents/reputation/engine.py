@@ -220,6 +220,12 @@ def _base_vendor(index: int) -> dict[str, Any]:
     category_specific = _round(overall + [5, 2, 0, -3, -7][index % 5])
     rating = _rating_from_score((components["performance_rating"] + delivery + compliance) / 3)
     completed_contracts = max(1, int(contract_history / 4) + (index % 5))
+    years_experience = 3 + (index % 13)
+    similar_projects = 2 + (index % 14)
+    typical_bid_sar = 720_000 + (index % 12) * 95_000
+    # The pinned demo vendor must be a credible candidate for the default IT tender.
+    if index == 0:
+        years_experience, similar_projects, typical_bid_sar = 10, 8, 1_350_000
     certifications = ["Commercial Registration", "VAT Certificate", "Saudization Certificate"]
     certification_categories = set(categories)
     if certification_categories & {"Information Technology", "Telecommunications", "Financial Services & Fintech"}:
@@ -239,12 +245,12 @@ def _base_vendor(index: int) -> dict[str, Any]:
         "city": ["Riyadh", "Jeddah", "Dammam", "Makkah", "Madinah", "Khobar"][index % 6],
         "categories": categories,
         "subcategories": subcategories,
-        "years_experience": 3 + (index % 13),
-        "similar_projects": 2 + (index % 14),
+        "years_experience": years_experience,
+        "similar_projects": similar_projects,
         "completed_contracts": completed_contracts,
         "active_contracts": index % 5,
         "average_contract_value_sar": 180_000 + (index % 10) * 145_000,
-        "typical_bid_sar": 720_000 + (index % 12) * 95_000,
+        "typical_bid_sar": typical_bid_sar,
         "delivery_reliability": delivery,
         "on_time_delivery": _round(delivery - 2 + (index % 4)),
         "dispute_rate": round(max(0.4, 8.5 - delivery / 14 + (index % 3) * 0.6), 1),
@@ -258,7 +264,7 @@ def _base_vendor(index: int) -> dict[str, Any]:
         },
         "verification_evidence": [f"Demo CR record {vendor_id}", *[f"Demo institutional verification: {name}" for name in _institutional_verifications(index, institutional)]],
         "delivery_history": {"completed_projects": completed_contracts, "on_time_percent": _round(delivery - 2 + (index % 4)), "quality_acceptance_percent": _round(delivery + 1), "open_corrective_actions": index % 3},
-        "commercial_profile": {"average_contract_value_sar": 180_000 + (index % 10) * 145_000, "typical_bid_sar": 720_000 + (index % 12) * 95_000, "financial_capacity_band": ["Standard", "Established", "Strategic"][index % 3]},
+        "commercial_profile": {"average_contract_value_sar": 180_000 + (index % 10) * 145_000, "typical_bid_sar": typical_bid_sar, "financial_capacity_band": ["Standard", "Established", "Strategic"][index % 3]},
         "capability_evidence": {"key_roles": ["Project Manager", "Quality Lead", "Category Specialist"], "references_available": 2 + (index % 5), "service_coverage": ["Riyadh", "Jeddah", "Dammam"] if index % 2 == 0 else ["Riyadh", "Regional"]},
         "reputation_evidence": {"rating_count": 5 + index, "recent_rating_trend": ["improving", "stable", "watch"][index % 3], "dispute_summary": "No material unresolved demo dispute" if index % 4 else "One resolved demo dispute"},
         "institutional_verifications": _institutional_verifications(index, institutional),
@@ -547,8 +553,9 @@ def _exclusion_reason(vendor: dict[str, Any], req: ShortlistRequest) -> str | No
         return "Below minimum similar project count"
     if req.required_certifications:
         certs = {cert.lower() for cert in vendor["certifications"]}
-        required = {cert.lower() for cert in req.required_certifications}
-        if not any(cert in certs for cert in required):
+        required = {_normalise_certification(cert) for cert in req.required_certifications}
+        normalised_certs = {_normalise_certification(cert) for cert in certs}
+        if not any(req_cert and any(req_cert in cert or cert in req_cert for cert in normalised_certs) for req_cert in required):
             return "Missing required certification evidence"
     if req.local_presence_required and vendor["city"] not in {"Riyadh", "Jeddah", "Dammam", "Makkah", "Madinah", "Khobar"}:
         return "Local presence mismatch"
@@ -615,11 +622,17 @@ def _requirement_match(vendor: dict[str, Any], req: ShortlistRequest) -> float:
         score += min(10, max(0, vendor["years_experience"] - req.minimum_years_experience + 1) * 2)
     if req.minimum_similar_projects:
         score += min(8, max(0, vendor["similar_projects"] - req.minimum_similar_projects + 1) * 1.6)
-    certs = {cert.lower() for cert in vendor["certifications"]}
-    matches = sum(1 for cert in req.required_certifications if cert.lower() in certs)
+    certs = {_normalise_certification(cert) for cert in vendor["certifications"]}
+    matches = sum(1 for requirement in req.required_certifications if any(_normalise_certification(requirement) in cert or cert in _normalise_certification(requirement) for cert in certs))
     if req.required_certifications:
         score += min(12, matches / len(req.required_certifications) * 12)
-    return _round(score)
+    # A profile match is evidence-based pre-qualification, not proof that a
+    # proposal will be perfect. Preserve headroom for bidder-specific evidence.
+    return min(94.0, _round(score))
+
+
+def _normalise_certification(value: str) -> str:
+    return " ".join(str(value).lower().replace("preferred", "").replace("relevant", "").split())
 
 
 def _proposal_quality(vendor: dict[str, Any], req: ShortlistRequest) -> float:
@@ -628,7 +641,7 @@ def _proposal_quality(vendor: dict[str, Any], req: ShortlistRequest) -> float:
     score += min(8, len(vendor["institutional_verifications"]) * 2.0)
     if req.timeline_days and vendor["on_time_delivery"] >= 88:
         score += 4
-    return _round(score)
+    return min(94.0, _round(score))
 
 
 def _price_competitiveness(vendor: dict[str, Any], req: ShortlistRequest) -> float:
@@ -658,7 +671,8 @@ def _risk_adjustment(vendor: dict[str, Any], price_score: float) -> float:
 
 
 def _risk_score(vendor: dict[str, Any], risk_adjustment: float) -> float:
-    return _round(100 + risk_adjustment * 4 - vendor["dispute_rate"] * 2)
+    # Risk is inferred from profile history, so it must not present certainty.
+    return min(94.0, _round(96 + risk_adjustment * 4 - vendor["dispute_rate"] * 2))
 
 
 def _probability_of_success(ai_recommendation_score: float, risk_score: float) -> int:
@@ -693,13 +707,13 @@ def _vendor_committee(
     compliance = _round(vendor["vri"]["components"]["compliance_and_licenses"])
     delivery = _round(vendor["delivery_reliability"])
     risk = _risk_score(vendor, risk_adjustment)
-    final = _round(
+    final = min(93.0, _round(
         technical * 0.30
         + commercial * 0.20
         + compliance * 0.20
         + delivery * 0.15
         + risk * 0.15
-    )
+    ))
     return {
         "final_score": final,
         "weights": {

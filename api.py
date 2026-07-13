@@ -596,7 +596,7 @@ def _committee_agent(committee: dict, name: str) -> dict:
     return next((a for a in agents if str(a.get("agent_name", "")).lower() == name.lower()), {})
 
 
-def _job_improve_tender(artifact: dict, file_id: str | None = None, template: str | None = None) -> dict:
+def _job_improve_tender(artifact: dict, file_id: str | None = None, template: str | None = None, review_prompt: str | None = None) -> dict:
     """Patch the existing tender artifact using AI Tender Committee feedback."""
     from pdf_renderer import build_pdf, normalize_template
 
@@ -607,6 +607,22 @@ def _job_improve_tender(artifact: dict, file_id: str | None = None, template: st
 
     edited = _json.loads(_json.dumps(artifact, ensure_ascii=False, default=str))
     output = edited["output"]
+    if review_prompt:
+        try:
+            from agents.llm_config import chat_json_text
+            from agents.tender_drafting.schemas import TenderDraft
+            import re
+            current_draft = {key: output[key] for key in TenderDraft.model_fields if key in output}
+            raw = chat_json_text(
+                [{"role": "system", "content": "You are the Mushtarry Tender Revision Agent. Revise the supplied existing tender using the committee instruction. Preserve buyer facts. Do not invent dates, amounts, percentages, or legal requirements. Return only JSON matching the existing tender schema."}, {"role": "user", "content": _json.dumps({"review_instruction": review_prompt, "existing_tender": current_draft}, ensure_ascii=False)}],
+                temperature=0.1, max_tokens=6000,
+            )
+            match = re.search(r"\{.*\}", raw or "", re.S)
+            if match:
+                output.update(TenderDraft.model_validate(_json.loads(match.group(0))).model_dump(mode="json"))
+                output["ai_revision"] = {"mode": "agent", "instruction": review_prompt}
+        except Exception:
+            output["ai_revision"] = {"mode": "rule_based_fallback", "instruction": review_prompt}
     intelligence = output.get("tender_intelligence") or {}
     committee = intelligence.get("ai_tender_committee") or {}
     priorities = committee.get("improvement_priorities") or intelligence.get("missing_or_weak_requirements") or []
@@ -758,6 +774,7 @@ class ImproveTenderReq(BaseModel):
     artifact: dict
     file_id: str | None = None
     template: str | None = None
+    review_prompt: str | None = None
 
 
 class VendorShortlistReq(BaseModel):
@@ -894,7 +911,7 @@ def start_evaluate():
 @app.post("/api/jobs/improve-tender")
 def start_improve_tender(req: ImproveTenderReq):
     job = _new_job("improve tender")
-    _run_async(job, _job_improve_tender, req.artifact, req.file_id, req.template)
+    _run_async(job, _job_improve_tender, req.artifact, req.file_id, req.template, req.review_prompt)
     return {"job_id": job.id}
 
 

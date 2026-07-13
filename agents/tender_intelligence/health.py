@@ -560,13 +560,13 @@ def _assess_ai_tender_committee(draft: TenderDraft, form: TenderBuyerForm) -> AI
             findings=risk_findings,
         ),
     ]
-    final_score = round(
+    final_score = min(92, round(
         technical_score * 0.25
         + commercial_score * 0.20
         + compliance_score * 0.20
         + delivery_score * 0.20
         + risk_score * 0.15
-    )
+    ))
     if final_score >= 85:
         recommendation = "Ready for Buyer-Admin review with normal human approval controls."
     elif final_score >= 70:
@@ -884,8 +884,16 @@ def assess_tender_health(draft: TenderDraft, form: TenderBuyerForm) -> TenderHea
     agents = [scope_agent, commercial_agent, compliance_agent, participation_agent]
     aggregate_fallback = _aggregate_fallback(agents, draft)
     aggregate = _run_llm_aggregator(draft=draft, agents=agents, fallback=aggregate_fallback)
-    ai_tender_committee = _assess_ai_tender_committee(draft, form)
+    # A complete template is not a perfect tender. Calibrate model optimism using
+    # concrete unresolved findings and retain headroom for buyer review.
     all_findings = [finding for agent in agents for finding in agent.findings]
+    ceiling = max(55, 92 - min(24, len(all_findings) * 3))
+    if aggregate.tender_quality_score > ceiling:
+        aggregate = aggregate.model_copy(update={
+            "tender_quality_score": ceiling,
+            "improvement_summary": (aggregate.improvement_summary.rstrip() + " Score calibrated against unresolved agent findings."),
+        })
+    ai_tender_committee = _assess_ai_tender_committee(draft, form)
 
     return TenderHealthScore(
         tender_quality_score=aggregate.tender_quality_score,

@@ -730,19 +730,19 @@ function renderAIRecommendationLayer(ti, committee) {
   return `<div class="ai-reco-layer">
     <div class="ai-reco-head">
       <div>
-        <h4>AI Recommendation Layer</h4>
-        <p>Optional decision support. Advisory only; buyer controls final evaluation, award, and publication.</p>
+        <h4>Tender Revision Recommendation</h4>
+        <p>This assesses the tender draft, not vendors. It turns committee findings into revision priorities before buyer approval.</p>
       </div>
       <span class="badge ok dot">Enabled</span>
     </div>
     <div class="reco-grid">
-      ${metricCard("Technical Evaluation", "50%", "Quality, fit, methodology")}
-      ${metricCard("Financial Evaluation", "20%", "Commercial competitiveness")}
-      ${metricCard("VRI Weight", "20%", "Vendor reputation signal")}
-      ${metricCard("Risk Assessment", "10%", "Delivery and compliance risk")}
+      ${metricCard("Technical Readiness", `${ti.scope_clarity ?? "-"}/100`, "Scope, specifications, acceptance")}
+      ${metricCard("Commercial Readiness", `${ti.commercial_clarity ?? "-"}/100`, "Pricing, payment, proposal controls")}
+      ${metricCard("Compliance Readiness", `${ti.compliance_readiness ?? "-"}/100`, "Documents, eligibility, governance")}
+      ${metricCard("Delivery Readiness", `${committee.rows?.find(r => r.agent === "Delivery Agent")?.score ?? "-"}/100`, "Deliverables, timeline, handover")}
       ${metricCard("Compliance Status", complianceStatus(ti, committee))}
       ${metricCard("Probability of Success", `${success}%`, scoreLabel(success))}
-      ${metricCard("Final AI Recommendation", finalScore !== null ? `${finalScore}/100` : "Pending", scoreLabel(finalScore))}
+      ${metricCard("Revision Priority", finalScore !== null ? `${finalScore}/100` : "Pending", scoreLabel(finalScore))}
     </div>
   </div>`;
 }
@@ -828,6 +828,7 @@ function applyHealthPromptPatch() {
         artifact: lastDraftResult.artifact,
         file_id: lastDraftResult.file_id,
         template: selectedPdfTemplate(),
+        review_prompt: lastHealthPromptPatch?.editScopeText || "Apply the AI Tender Committee findings to improve this existing tender while preserving buyer-provided facts.",
       }),
     }).then(r => r.json()),
     render: renderDraft,
@@ -1064,6 +1065,7 @@ function renderDraft(result) {
       ${PDF_TEMPLATES.filter(([v]) => v !== activeTemplate).map(([v, label]) => `<a class="btn ghost" href="/api/download/${fid}/pdf?template=${encodeURIComponent(v)}" target="_blank">⬇ ${esc(label)}</a>`).join("")}
       <a class="btn ghost" href="/api/download/${fid}/json" target="_blank">⬇ JSON</a>` : ""}
       ${result.artifact?.id ? `<button class="btn primary" onclick="approveTenderDraft('${esc(result.artifact.id)}')">Approve & Publish to Vendor Feed</button>` : ""}
+      <button class="btn ghost" onclick="editTenderInputs()">Edit Tender Inputs</button>
     </div>
     <div id="draftVendorRecommendations" class="section-block">
       <div class="sb-head"><span class="num">V</span>Recommended Vendors</div>
@@ -1090,6 +1092,12 @@ function shortlistPayloadFromForm(form) {
     required_sector_license: form.required_sector_license || null,
   };
 }
+
+function editTenderInputs() {
+  show("draft");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+window.editTenderInputs = editTenderInputs;
 
 async function approveTenderDraft(artifactId) {
   if (sessionRole() !== "buyer") return;
