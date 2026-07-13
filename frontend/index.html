@@ -325,14 +325,20 @@
             <label class="field-label" style="margin-top:14px">Methodology requirements</label>
             <textarea id="draftMethodologyRequirements" class="input textarea compact-textarea" placeholder="Optional. Qwen can derive from the SoW."></textarea>
             <label class="field-label" style="margin-top:14px">Deliverables</label>
-            <div class="editable-table-wrap"><table class="editable-table" id="draftDeliverablesTable"><thead><tr><th>Deliverable</th><th>Description / acceptance output</th><th>Format</th><th></th></tr></thead><tbody></tbody></table></div>
-            <button type="button" class="table-add" data-add-row="draftDeliverablesTable">+ Add deliverable</button>
+            <div class="table-editor">
+              <div class="table-editor-head"><span>Add each promised output and its acceptance evidence.</span><button type="button" class="btn ghost table-add" onclick="addTenderTableRow('draftDeliverablesTable')">+ Add deliverable</button></div>
+              <div class="editable-table-wrap"><table class="editable-table" id="draftDeliverablesTable"><thead><tr><th>Deliverable</th><th>Description / acceptance output</th><th>Format</th><th></th></tr></thead><tbody></tbody></table></div>
+            </div>
             <label class="field-label" style="margin-top:14px">Timeline milestones</label>
-            <div class="editable-table-wrap"><table class="editable-table" id="draftTimelineTable"><thead><tr><th>Milestone</th><th>Target date / timing</th><th></th></tr></thead><tbody></tbody></table></div>
-            <button type="button" class="table-add" data-add-row="draftTimelineTable">+ Add milestone</button>
+            <div class="table-editor">
+              <div class="table-editor-head"><span>Set the key approval gates and target timing.</span><button type="button" class="btn ghost table-add" onclick="addTenderTableRow('draftTimelineTable')">+ Add milestone</button></div>
+              <div class="editable-table-wrap"><table class="editable-table" id="draftTimelineTable"><thead><tr><th>Milestone</th><th>Target date / timing</th><th></th></tr></thead><tbody></tbody></table></div>
+            </div>
             <label class="field-label" style="margin-top:14px">Roles and responsibilities</label>
-            <div class="editable-table-wrap"><table class="editable-table" id="draftResponsibilitiesTable"><thead><tr><th>Party / role</th><th>Responsibilities</th><th></th></tr></thead><tbody></tbody></table></div>
-            <button type="button" class="table-add" data-add-row="draftResponsibilitiesTable">+ Add role or responsibility</button>
+            <div class="table-editor">
+              <div class="table-editor-head"><span>Use semicolons to separate multiple responsibilities.</span><button type="button" class="btn ghost table-add" onclick="addTenderTableRow('draftResponsibilitiesTable')">+ Add role</button></div>
+              <div class="editable-table-wrap"><table class="editable-table" id="draftResponsibilitiesTable"><thead><tr><th>Party / role</th><th>Responsibilities</th><th></th></tr></thead><tbody></tbody></table></div>
+            </div>
             <label class="field-label" style="margin-top:14px">Evaluation criteria</label>
             <textarea id="draftEvaluationCriteria" class="input textarea compact-textarea" placeholder="Optional. Qwen can derive from the SoW and project."></textarea>
             <div class="grid two" style="margin-top:14px">

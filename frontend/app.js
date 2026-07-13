@@ -75,6 +75,13 @@ function addEditableRow(tableId, values = []) {
   $("tbody", table).appendChild(row);
 }
 
+function addTenderTableRow(tableId) {
+  addEditableRow(tableId);
+  const table = document.getElementById(tableId);
+  $("tbody tr:last-child input", table)?.focus();
+}
+window.addTenderTableRow = addTenderTableRow;
+
 function tableRows(tableId, columns) {
   const table = document.getElementById(tableId);
   if (!table) return [];
@@ -1195,16 +1202,6 @@ $("#reviewSowBtn").addEventListener("click", () => {
       return renderSowReview(result);
     },
   });
-});
-
-// Event delegation keeps the add-row controls reliable even when the buyer form
-// is rerendered or optional fields are repopulated.
-document.addEventListener("click", event => {
-  const button = event.target.closest("[data-add-row]");
-  if (!button) return;
-  addEditableRow(button.dataset.addRow);
-  const table = document.getElementById(button.dataset.addRow);
-  $("tbody tr:last-child input", table)?.focus();
 });
 
 function applyPopulatedOptionalSections(form) {
