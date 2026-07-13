@@ -1,6 +1,6 @@
 import unittest
 
-from agents.reputation import list_buyers, list_vendors, shortlist_vendors
+from agents.reputation import get_buyer, get_vendor, list_buyers, list_vendors, shortlist_vendors
 
 
 class TestDemoProfiles(unittest.TestCase):
@@ -27,3 +27,13 @@ class TestDemoProfiles(unittest.TestCase):
         self.assertIsNotNone(vendor)
         self.assertLess(vendor["technical_evaluation"], 100)
         self.assertLess(vendor["risk_score"], 100)
+
+    def test_at_risk_demo_profiles_expose_low_bri_and_vri_evidence(self):
+        vendor = get_vendor("VND-031")
+        buyer = get_buyer("BUY-031")
+        self.assertEqual(vendor["status"], "under_review")
+        self.assertLess(vendor["vri"]["overall"], 50)
+        self.assertIn("unresolved", vendor["reputation_evidence"]["dispute_summary"])
+        self.assertEqual(buyer["status"], "under_review")
+        self.assertLess(buyer["bri"]["overall"], 50)
+        self.assertGreater(buyer["payment_evidence"]["overdue_invoices"], 0)

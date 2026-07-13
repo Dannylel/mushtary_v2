@@ -66,10 +66,10 @@ function responsibilityRows() {
 function addEditableRow(tableId, values = []) {
   const table = document.getElementById(tableId);
   if (!table) return;
-  const cells = table.querySelectorAll("thead th").length - 1;
+  const headers = $$("thead th", table).slice(0, -1).map(th => th.textContent.trim());
   const row = document.createElement("tr");
-  row.innerHTML = Array.from({ length: cells }, (_, index) =>
-    `<td><input value="${esc(values[index] || "")}" /></td>`
+  row.innerHTML = headers.map((label, index) =>
+    `<td data-label="${esc(label)}"><input value="${esc(values[index] || "")}" /></td>`
   ).join("") + '<td><button type="button" class="table-remove" title="Remove row">Remove</button></td>';
   $(".table-remove", row).addEventListener("click", () => row.remove());
   $("tbody", table).appendChild(row);
@@ -1518,7 +1518,18 @@ function renderReputationHub(data) {
 
   const vendors = (data.vendors || []).slice().sort((a, b) => b.vri.category_specific - a.vri.category_specific);
   const buyers = (data.buyers || []).slice().sort((a, b) => b.bri.overall - a.bri.overall);
+  const atRiskVendor = vendors.find(v => v.status === "under_review" && v.vri.category_specific < 50);
+  const atRiskBuyer = buyers.find(b => b.status === "under_review" && b.bri.overall < 50);
   $("#reputationAccounts").innerHTML = `<div class="rep-columns">
+    ${(atRiskVendor || atRiskBuyer) ? `<div class="section-block rep-risk-showcase">
+      <div class="sb-head"><span class="num">!</span>Enhanced Due Diligence Demo Profiles</div>
+      <div class="sb-body"><p class="hint">These profiles demonstrate how BRI/VRI makes risk evidence visible before a buyer publishes or a vendor commits to a tender.</p>
+        <div class="rep-risk-grid">
+          ${atRiskVendor ? `<div><b>${esc(atRiskVendor.name)}</b><span>Vendor VRI ${esc(atRiskVendor.vri.category_specific)}/100 · ${esc(atRiskVendor.status.replace("_", " "))}</span><small>${esc(atRiskVendor.profile_summary)}</small></div>` : ""}
+          ${atRiskBuyer ? `<div><b>${esc(atRiskBuyer.name)}</b><span>Buyer BRI ${esc(atRiskBuyer.bri.overall)}/100 · ${esc(atRiskBuyer.status.replace("_", " "))}</span><small>${esc(atRiskBuyer.profile_summary)}</small></div>` : ""}
+        </div>
+      </div>
+    </div>` : ""}
     <div class="section-block">
       <div class="sb-head"><span class="num">V</span>Vendor Accounts</div>
       <div class="sb-body">${renderVendorAccountTable(vendors)}</div>
@@ -1535,7 +1546,7 @@ function renderVendorAccountTable(vendors) {
     <td><b>${esc(v.name)}</b><span>${esc(v.account_id)} - ${esc(v.city)}</span></td>
     <td>${esc(v.categories[0])}<span>${esc(v.subcategories[0])}</span></td>
     <td><b>${esc(v.vri.category_specific)}</b><span>${esc(v.vri.level)}</span></td>
-    <td><span class="badge ${scoreBadgeClass(v.vri.category_specific)}">${esc(v.badge)}</span><span>${badgeList(v.special_badges)}</span></td>
+    <td><span class="badge ${scoreBadgeClass(v.vri.category_specific)}">${esc(v.badge)}</span><span>${badgeList(v.special_badges)}</span><span class="account-status ${esc(v.status)}">${esc(v.status.replace("_", " "))}</span></td>
     <td>${esc(v.rating)}/5<span>${esc(v.completed_contracts)} contracts</span></td>
   </tr>`).join("");
   return `<div class="rep-table-wrap"><table class="rep-table">
@@ -1549,7 +1560,7 @@ function renderBuyerAccountTable(buyers) {
     <td><b>${esc(b.name)}</b><span>${esc(b.account_id)} - ${esc(b.city)}</span></td>
     <td>${esc(b.primary_category)}<span>${esc(b.primary_subcategory)}</span></td>
     <td><b>${esc(b.buyer_score ?? b.bri.overall)}/100</b><span>${esc(b.bri.level)}</span></td>
-    <td><span class="badge ${scoreBadgeClass(b.bri.overall)}">${esc(b.badge)}</span><span>${badgeList(b.special_badges)}</span></td>
+    <td><span class="badge ${scoreBadgeClass(b.bri.overall)}">${esc(b.badge)}</span><span>${badgeList(b.special_badges)}</span><span class="account-status ${esc(b.status)}">${esc(b.status.replace("_", " "))}</span></td>
     <td>${esc(b.payment_reliability)}%<span>Dispute Rate: ${esc(b.dispute_rate_level || b.dispute_rate)}</span></td>
   </tr>`).join("");
   return `<div class="rep-table-wrap"><table class="rep-table">

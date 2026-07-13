@@ -387,8 +387,98 @@ def _buyer_special_badges(index: int, payment: float, fairness: float) -> list[s
     return badges[:3]
 
 
-VENDORS = [_base_vendor(i) for i in range(30)]
-BUYERS = [_base_buyer(i) for i in range(30)]
+def _adverse_vendor_profile() -> dict[str, Any]:
+    """A deliberate negative demo case for explaining VRI and exclusion controls."""
+    vendor = _base_vendor(29)
+    components = {
+        "performance_rating": 36.0,
+        "compliance_and_licenses": 28.0,
+        "institutional_verification": 32.0,
+        "delivery_performance": 34.0,
+        "financial_strength": 38.0,
+        "tender_success_rate": 30.0,
+        "contract_history": 35.0,
+        "ai_risk_signals": 22.0,
+    }
+    vri = _component_score(components, VRI_WEIGHTS)
+    vendor.update({
+        "account_id": "VND-031",
+        "name": "Demo At-Risk Technology Supplier",
+        "email": "vendor31@demo.mushtary.local",
+        "status": "under_review",
+        "city": "Riyadh",
+        "categories": ["Information Technology"],
+        "subcategories": ["IT Infrastructure & Data Centers"],
+        "years_experience": 4,
+        "similar_projects": 1,
+        "completed_contracts": 3,
+        "active_contracts": 0,
+        "delivery_reliability": 34.0,
+        "on_time_delivery": 31.0,
+        "dispute_rate": 13.4,
+        "rating": 2.7,
+        "certifications": ["Commercial Registration"],
+        "document_profile": {
+            "commercial_registration": {"status": "review_required_demo", "expires_on": "2025-12-31"},
+            "vat_certificate": {"status": "expired_demo", "expires_on": "2025-09-30"},
+            "national_address": {"status": "unverified_demo", "expires_on": None},
+            "saudization_certificate": {"status": "expired_demo", "expires_on": "2025-03-31"},
+        },
+        "verification_evidence": ["Demo profile: verification evidence is incomplete.", "Demo profile: two document renewals are overdue."],
+        "delivery_history": {"completed_projects": 3, "on_time_percent": 31.0, "quality_acceptance_percent": 42.0, "open_corrective_actions": 5},
+        "commercial_profile": {"average_contract_value_sar": 210_000, "typical_bid_sar": 480_000, "financial_capacity_band": "Restricted"},
+        "capability_evidence": {"key_roles": ["Interim Project Coordinator"], "references_available": 0, "service_coverage": ["Riyadh"]},
+        "reputation_evidence": {"rating_count": 3, "recent_rating_trend": "declining", "dispute_summary": "Demo case: repeated delivery and documentation complaints remain unresolved."},
+        "institutional_verifications": [],
+        "vri": {"overall": vri, "category_specific": vri, "level": _vri_level(vri), "components": components},
+        "badge": "Under Observation",
+        "special_badges": ["Enhanced Due Diligence"],
+        "profile_summary": "Negative demo profile: under review due to overdue documents, poor delivery outcomes, and unresolved disputes.",
+    })
+    return vendor
+
+
+def _adverse_buyer_profile() -> dict[str, Any]:
+    """A deliberate negative demo case for explaining BRI and vendor safeguards."""
+    buyer = _base_buyer(29)
+    components = {
+        "payment_reliability": 32.0,
+        "evaluation_fairness": 38.0,
+        "dispute_behavior": 30.0,
+        "procurement_volume": 42.0,
+        "platform_activity": 35.0,
+        "ai_risk_signals": 24.0,
+    }
+    bri = _component_score(components, BRI_WEIGHTS)
+    buyer.update({
+        "account_id": "BUY-031",
+        "name": "Demo At-Risk Procurement Entity",
+        "email": "buyer31@demo.mushtary.local",
+        "status": "under_review",
+        "city": "Riyadh",
+        "completed_tenders": 4,
+        "active_tenders": 0,
+        "annual_procurement_spend_sar": 1_200_000,
+        "payment_reliability": 32.0,
+        "average_payment_days": 104,
+        "dispute_rate": 12.1,
+        "rating": 2.8,
+        "evaluation_evidence": {"completed_evaluations": 4, "criteria_published_percent": 38.0, "average_clarification_response_hours": 96, "conflict_checks_completed": 1},
+        "payment_evidence": {"invoices_paid": 11, "on_time_payment_percent": 32.0, "average_payment_days": 104, "overdue_invoices": 7},
+        "governance_evidence": {"buyer_users": 1, "approval_controls": ["Manual review required before publication"], "complaints_resolved": 0},
+        "reputation_evidence": {"rating_count": 4, "recent_rating_trend": "declining", "dispute_summary": "Demo case: delayed-payment and evaluation-transparency complaints require enhanced review."},
+        "buyer_score": bri,
+        "bri": {"overall": bri, "level": _buyer_reliability_level(bri), "components": components},
+        "dispute_rate_level": "High",
+        "badge": "Under Observation",
+        "special_badges": ["Enhanced Due Diligence"],
+        "profile_summary": "Negative demo profile: under review because of late payments, weak evaluation controls, and unresolved disputes.",
+    })
+    return buyer
+
+
+VENDORS = [_base_vendor(i) for i in range(30)] + [_adverse_vendor_profile()]
+BUYERS = [_base_buyer(i) for i in range(30)] + [_adverse_buyer_profile()]
 
 
 @dataclass
