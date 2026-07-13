@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mushtary — AI Procurement Console</title>
-  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/styles.css?v=20260713-tablefix" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 </head>
@@ -515,6 +515,35 @@
     <div class="console-body" id="consoleBody"></div>
   </div>
 
-  <script src="/app.js"></script>
+  <script>
+    // Kept beside the buyer-form markup so its essential add-row controls work
+    // even if a browser still has an earlier app.js in memory.
+    window.addTenderTableRow = function (tableId) {
+      const table = document.getElementById(tableId);
+      const body = table && table.querySelector("tbody");
+      if (!body) return;
+      const labels = Array.from(table.querySelectorAll("thead th")).slice(0, -1).map(th => th.textContent.trim());
+      const row = document.createElement("tr");
+      labels.forEach(label => {
+        const cell = document.createElement("td");
+        cell.dataset.label = label;
+        const input = document.createElement("input");
+        input.setAttribute("aria-label", label);
+        cell.appendChild(input);
+        row.appendChild(cell);
+      });
+      const action = document.createElement("td");
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "table-remove";
+      remove.textContent = "Remove";
+      remove.addEventListener("click", () => row.remove());
+      action.appendChild(remove);
+      row.appendChild(action);
+      body.appendChild(row);
+      row.querySelector("input")?.focus();
+    };
+  </script>
+  <script src="/app.js?v=20260713-tablefix"></script>
 </body>
 </html>

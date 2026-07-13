@@ -45,6 +45,10 @@ async def utf8_responses(request: Request, call_next):
     content_type = response.headers.get("content-type", "")
     if (content_type.startswith("text/") or "application/json" in content_type) and "charset=" not in content_type.lower():
         response.headers["content-type"] = f"{content_type}; charset=utf-8"
+    # This local demo is edited frequently during rehearsals. Never let an old
+    # JavaScript/CSS bundle leave the buyer form with a mismatched click handler.
+    if request.url.path in {"/", "/index.html", "/app.js", "/styles.css"}:
+        response.headers["cache-control"] = "no-store"
     return response
 
 # ── Activity feed: bridge agents' log lines into the live console ───────────────
