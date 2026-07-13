@@ -5,7 +5,7 @@ System prompt text lives in `agents/prompts/sow_extractor_system.md` (one prompt
 from agents.prompts import load_prompt
 
 PROMPT_NAME = "sow_extract_v1"
-PROMPT_VERSION = "1.1.0"
+PROMPT_VERSION = "1.2.0"
 
 SYSTEM_PROMPT = load_prompt("sow_extractor_system")
 

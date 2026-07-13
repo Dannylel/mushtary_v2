@@ -40,6 +40,10 @@ body {
 .signin-panel h1 { margin: 18px 0 8px; font-size: 28px; line-height: 1.1; }
 .signin-panel p { margin: 0 0 18px; color: var(--ink-soft); line-height: 1.55; }
 .signin-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.signin-picker { border-top: 1px solid var(--line); padding-top: 14px; display: grid; gap: 7px; }
+.signin-picker label { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.signin-picker > div { display: flex; gap: 8px; }
+.signin-picker select { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 9px; padding: 8px; color: var(--ink); background: #fff; }
 
 .app { display: grid; grid-template-columns: 270px 1fr; min-height: 100vh; }
 
@@ -466,6 +470,18 @@ select.input { cursor: pointer; }
 .milestone-row { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 10px; padding: 8px 0; border-bottom: 1px dashed var(--line); font-size: 13.5px; }
 .milestone-row:last-child { border-bottom: 0; }
 .milestone-row .muted2 { color: var(--muted); font-size: 12px; }
+.editable-table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; margin-top: 8px; }
+.editable-table { width: 100%; border-collapse: collapse; min-width: 620px; }
+.editable-table th { background: #f7f9fc; color: var(--muted); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; text-align: left; padding: 10px; }
+.editable-table td { padding: 7px; border-top: 1px solid var(--line); }
+.editable-table input { width: 100%; border: 1px solid transparent; background: transparent; border-radius: 6px; padding: 8px; color: var(--ink); font: inherit; }
+.editable-table input:focus { outline: none; border-color: var(--accent); background: #fff; }
+.table-add, .table-remove { border: 0; background: transparent; cursor: pointer; font-weight: 700; }
+.table-add { margin-top: 8px; color: var(--accent); padding: 4px 0; }
+.table-remove { color: #c2410c; padding: 7px; }
+.draft-data-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+.draft-data-table th { background: #f1f5f9; color: var(--muted); text-align: left; font-size: 11px; text-transform: uppercase; padding: 9px; }
+.draft-data-table td { padding: 9px; vertical-align: top; border-top: 1px solid var(--line); }
 
 @media (max-width: 900px) {
   .app { grid-template-columns: 1fr; }

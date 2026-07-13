@@ -7,10 +7,10 @@ System prompts live in `agents/prompts/` (one prompt per file):
 from agents.prompts import load_prompt
 
 SCORE_PROMPT_NAME = "vendor_score_v1"
-SCORE_PROMPT_VERSION = "2.1.0"
+SCORE_PROMPT_VERSION = "2.2.0"
 
 RANK_PROMPT_NAME = "evaluation_rank_v1"
-RANK_PROMPT_VERSION = "2.1.0"
+RANK_PROMPT_VERSION = "2.2.0"
 
 SCORING_SYSTEM_PROMPT = load_prompt("evaluation_scoring_system")
 RANKING_SYSTEM_PROMPT = load_prompt("evaluation_ranking_system")
@@ -72,7 +72,9 @@ def build_ranking_message(vendor_scores: list, policy) -> str:
         f"fit_score: {s.fit_score_breakdown.final_fit_score:.1f}, "
         f"vri: {s.fit_score_breakdown.vri_component:.1f}, "
         f"risk: {s.risk_level}, "
-        f"disqualified: {s.disqualification.disqualified}"
+        f"disqualified: {s.disqualification.disqualified}, "
+        f"reasoning: {s.overall_reasoning}, "
+        f"missing_requirements: {', '.join(s.missing_requirements) or 'none stated'}"
         for s in vendor_scores
     )
     return f"""\

@@ -8,7 +8,8 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from agents.base import BaseAgent
-from agents.llm_config import chat_text
+from agents.llm_config import chat_json_text
+from agents.prompts import GLOBAL_QUALITY_STANDARD
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,7 @@ class SoWReviewResult(BaseModel):
     rewritten_scope: str
 
 
-SYSTEM_PROMPT = """\
+SYSTEM_PROMPT = GLOBAL_QUALITY_STANDARD + "\n\n" + """\
 You are a senior Saudi-market procurement scope-of-work reviewer.
 
 Evaluate the buyer's draft scope before it is used to generate a formal tender.
@@ -43,6 +44,14 @@ Return ONLY valid JSON with this exact shape:
 The rewrite must preserve the buyer's intent, add missing structure, remove ambiguity,
 and sound like a formal tender document. Do not invent highly specific budgets, dates,
 brand names, or quantities unless the buyer provided them.
+
+The rewritten_scope must be substantive and organize the available facts into: purpose and
+outcome; included workstreams and boundaries; vendor activities; concrete deliverables with
+minimum contents; buyer/vendor responsibilities; quality review and acceptance evidence;
+reporting/governance; dependencies, assumptions, exclusions, and handover. Where a necessary
+fact is absent, write a precise buyer-confirmation requirement rather than silently inventing it.
+Each gap and recommendation must identify the affected phrase/topic and the practical effect on
+vendor pricing, staffing, delivery, compliance, or acceptance.
 """
 
 
@@ -116,13 +125,13 @@ Buyer draft scope of work:
 {scope_text or "Not provided"}
 """
         try:
-            raw = chat_text(
+            raw = chat_json_text(
                 [
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.25,
-                max_tokens=2200,
+                max_tokens=3400,
             )
             return SoWReviewResult.model_validate(_extract_json(raw))
         except Exception as e:

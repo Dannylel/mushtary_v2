@@ -75,6 +75,12 @@ before "{" or after "}". Use double quotes; no trailing commas. Keys:
 }
 
 ## Consistency checks before answering
+- scope_of_work must contain 5-8 substantive sentences defining included workstreams,
+  boundaries, operating context, vendor obligations, quality control, reporting, and handover.
+- technical_requirements and methodology_requirements must each be detailed enough to generate
+  multiple testable tender requirements; never return a one-sentence category description.
+- Every deliverable description must state minimum contents and acceptance evidence. Every
+  timeline milestone must identify the related deliverable or decision gate.
 - technical_weight + financial_weight = 100 and they match evaluation_model exactly
   (e.g. "70/30" means technical_weight 70, financial_weight 30).
 - 5-8 deliverables and 5-7 timeline milestones, both consistent with the scope paragraph.

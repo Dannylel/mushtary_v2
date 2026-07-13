@@ -15,6 +15,7 @@ This avoids invalid LLM JSON and prevents blank PDFs.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from agents.buyer_form import TenderBuyerForm
@@ -307,18 +308,28 @@ NARRATIVE_SYSTEM_PROMPT = load_prompt("drafting_context_narrative_system")
 
 
 def _narrative_user_message(form: TenderBuyerForm) -> str:
-    return f"""\
-Draft the narrative sections for this tender.
-
-BUYER: {form.buyer_name}
-BUYER DESCRIPTION: {form.buyer_description}
-TENDER TITLE: {form.tender_title}
-CATEGORY: {form.category} / {form.subcategory}
-PROJECT OBJECTIVE: {form.project_objective}
-SAUDIZATION REQUIRED: {form.saudization_required}
-
-Return only the JSON object.
-"""
+    context = {
+        "buyer_name": form.buyer_name,
+        "buyer_description": form.buyer_description,
+        "tender_title": form.tender_title,
+        "category": form.category,
+        "subcategory": form.subcategory,
+        "location": form.location,
+        "project_objective": form.project_objective,
+        "scope_of_work": form.scope_of_work,
+        "technical_requirements": form.technical_requirements,
+        "methodology_requirements": form.methodology_requirements,
+        "deliverables": [d.model_dump(mode="json") for d in form.deliverables],
+        "timeline": [t.model_dump(mode="json") for t in form.timeline],
+        "roles_and_responsibilities": [r.model_dump(mode="json") for r in form.roles_and_responsibilities],
+        "procurement_method": form.procurement_method,
+        "proposal_format": form.proposal_format,
+        "submission_method": form.submission_method,
+        "evaluation_model": form.evaluation_model,
+        "saudization_required": form.saudization_required,
+        "confidentiality_required": form.confidentiality_required,
+    }
+    return "Draft the narrative sections from this complete buyer context.\n\n" + json.dumps(context, ensure_ascii=False, indent=2) + "\n\nReturn only the JSON object."
 
 
 def _pick(d: dict, key: str, default: str) -> str:
@@ -336,7 +347,7 @@ class ContextSectionAgent(BaseSectionAgent):
         sc = form.submission_controls
 
         # AI narrative overlay (falls back to deterministic prose on any failure).
-        narrative = self._generate(NARRATIVE_SYSTEM_PROMPT, _narrative_user_message(form), max_tokens=1600)
+        narrative = self._generate(NARRATIVE_SYSTEM_PROMPT, _narrative_user_message(form), max_tokens=2600)
         ni = narrative.get("introduction") if isinstance(narrative, dict) else {}
         ninst = narrative.get("instructions") if isinstance(narrative, dict) else {}
         naward = narrative.get("award") if isinstance(narrative, dict) else {}

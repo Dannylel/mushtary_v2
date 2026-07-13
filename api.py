@@ -54,7 +54,8 @@ class _ActivityLogHandler(logging.Handler):
 
 _agents_logger = logging.getLogger("agents")
 _agents_logger.setLevel(logging.INFO)
-_agents_logger.addHandler(_ActivityLogHandler())
+if not any(isinstance(handler, _ActivityLogHandler) for handler in _agents_logger.handlers):
+    _agents_logger.addHandler(_ActivityLogHandler())
 
 
 # ── Tiny in-memory job manager ──────────────────────────────────────────────────
@@ -72,7 +73,15 @@ class Job(BaseModel):
 _JOBS: dict[str, Job] = {}
 _LOCK = threading.Lock()
 _TENDERS: dict[str, dict[str, Any]] = {}
+_PENDING_TENDERS: dict[str, dict[str, Any]] = {}
 _PROPOSALS: dict[str, dict[str, Any]] = {}
+
+
+def _save_artifact(artifact: dict[str, Any]) -> dict[str, Any]:
+    """Persist an AIArtifact in the local audit store before returning it to the UI."""
+    from agents.artifact_store import save_artifact
+
+    return save_artifact(artifact)
 
 
 def _new_job(kind: str) -> Job:
@@ -191,7 +200,7 @@ def _publish_tender_artifact(
         "id": tender_id,
         "file_id": file_id,
         "template": template,
-        "status": "draft_visible_to_vendors",
+        "status": "published",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "buyer_id": buyer["account_id"],
         "buyer": buyer,
@@ -219,6 +228,11 @@ def _publish_tender_artifact(
 
 def _proposal_comparison_for_tender(tender: dict[str, Any]) -> dict[str, Any]:
     from agents.reputation import get_vendor
+    from agents.vendor_committee import run_vendor_committee
+    from agents.vendor_committee.graph import PROMPT_NAME, PROMPT_VERSION
+    from agents.base import AIArtifact
+    from agents.llm_config import get_model
+    from agents.artifact_store import get_latest_artifact
 
     proposals = [p for p in _PROPOSALS.values() if p["tender_id"] == tender["id"]]
     scored = {}
@@ -254,6 +268,55 @@ def _proposal_comparison_for_tender(tender: dict[str, Any]) -> dict[str, Any]:
                 score["why_selected"] = (score.get("why_selected") or []) + ["Commercial proposal is unusually low compared with the tender estimate."]
             elif ratio <= 1.05:
                 score["ai_recommendation_score"] = min(100, round((score.get("ai_recommendation_score") or 0) + 2, 1))
+        tender_context = {
+            "title": tender.get("title"),
+            "category": tender.get("category"),
+            "subcategory": tender.get("subcategory"),
+            "estimated_value_sar": estimate,
+            "budget_range": tender.get("budget_range"),
+            "submission_deadline": tender.get("submission_deadline"),
+            "minimum_years_experience": tender.get("minimum_years_experience"),
+            "minimum_similar_projects": tender.get("minimum_similar_projects"),
+            "required_certifications": tender.get("required_certifications") or [],
+            "scope_of_work": (tender.get("artifact") or {}).get("output", {}).get("scope_of_work", {}),
+        }
+        baseline_committee = dict(score.get("committee") or {"final_score": score.get("ai_recommendation_score", 58), "agents": []})
+        stored_artifact = get_latest_artifact(
+            tender_id=tender["id"], vendor_id=proposal["vendor_id"], proposal_id=proposal["id"],
+            artifact_type="VENDOR_TENDER_COMMITTEE",
+        )
+        committee = stored_artifact["output"] if stored_artifact else run_vendor_committee(
+            tender=tender_context, vendor=vendor, proposal=proposal, baseline=baseline_committee,
+        )
+        score["committee"] = committee
+        score["committee_source"] = "deterministic_fallback" if committee.get("fallback_used") else "llm"
+        score["deterministic_recommendation_score"] = score.get("ai_recommendation_score")
+        score["ai_recommendation_score"] = committee["final_score"]
+        score["why_selected"] = (score.get("why_selected") or []) + [committee["final_recommendation"]]
+        if not stored_artifact:
+            committee_artifact = AIArtifact(
+                id=uuid.uuid4().hex,
+                trace_id=f"trace_{uuid.uuid4().hex}",
+                type="VENDOR_TENDER_COMMITTEE",
+                vendor_id=proposal["vendor_id"],
+                tender_id=tender["id"],
+                actor_id=tender.get("buyer_id"),
+                prompt_name=PROMPT_NAME,
+                prompt_version=PROMPT_VERSION,
+                input_snapshot={
+                    "tender_requirements": tender_context,
+                    "vendor_profile": vendor,
+                    "submitted_proposal": proposal,
+                    "deterministic_baseline": baseline_committee,
+                },
+                output=committee,
+                model_used=get_model(),
+            )
+            committee_artifact_data = committee_artifact.model_dump(mode="json")
+            committee_artifact_data["proposal_id"] = proposal["id"]
+            stored_artifact = _save_artifact(committee_artifact_data)
+        score["committee_artifact_id"] = stored_artifact["id"]
+        score["committee_approval_status"] = stored_artifact["status"]
         score["proposal"] = proposal
         score["vendor"] = vendor
         ranked.append(score)
@@ -362,6 +425,9 @@ def _job_full_draft(
     if not artifact:
         raise RuntimeError("Pipeline returned no artifact")
 
+    artifact["actor_id"] = buyer_id or artifact.get("actor_id")
+    _save_artifact(artifact)
+
     fid = uuid.uuid4().hex[:12]
     template = normalize_template(template)
     pdf_path = OUTPUTS / f"tender_{fid}_{template}.pdf"
@@ -372,15 +438,31 @@ def _job_full_draft(
                          encoding="utf-8")
     build_pdf(artifact, pdf_path, template=template)
     build_pdf(artifact, default_pdf_path, template=template)
-    published_tender = _publish_tender_artifact(artifact, fid, template, buyer_id)
-
-    return {"artifact": artifact, "file_id": fid, "template": template, "published_tender": published_tender}
+    # Drafts remain private until the Buyer-Admin explicitly approves publication.
+    with _LOCK:
+        _PENDING_TENDERS[artifact["id"]] = {
+            "artifact": artifact, "file_id": fid, "template": template, "buyer_id": buyer_id,
+        }
+    return {
+        "artifact": artifact, "file_id": fid, "template": template,
+        "publication_status": "PENDING_BUYER_APPROVAL",
+        "human_in_the_loop": "This draft is private. Buyer-Admin approval is required before vendors can view it.",
+    }
 
 
 def _job_form(seed: str | None) -> dict:
     from agents.graph.modes import run_mode
     form = run_mode("form", seed=seed)
     return {"form": form.model_dump(mode="json")}
+
+
+def _job_populate_optional_sections(project_name: str, scope_text: str, form_overrides: dict | None = None) -> dict:
+    """Derive editable optional fields without generating or publishing a tender."""
+    from agents.sow_extractor import SoWExtractorAgent
+
+    source = f"Project Name: {project_name.strip()}\n\nScope of Work:\n{scope_text.strip()}"
+    form = SoWExtractorAgent().extract_from_text(source)
+    return {"form": _apply_form_overrides(form, form_overrides).model_dump(mode="json")}
 
 
 def _job_extract(sow_path: str) -> dict:
@@ -402,7 +484,8 @@ def _job_validate(payload: dict) -> dict:
 
     data = VendorValidationInput.model_validate(payload)
     artifact = VendorValidationAgent().run(data)
-    return {"artifact": artifact.model_dump(mode="json")}
+    stored = _save_artifact(artifact.model_dump(mode="json"))
+    return {"artifact": stored}
 
 
 def _job_evaluate() -> dict:
@@ -436,7 +519,9 @@ def _job_evaluate() -> dict:
             policy=policy,
             market_avg_price_sar=tender.get("market_avg_price_sar"),
         )
-        s = agent.run(payload).output
+        score_artifact = agent.run(payload)
+        _save_artifact(score_artifact.model_dump(mode="json"))
+        s = score_artifact.output
         s["vendor_name"] = vd["vendor_name"]  # carry name for display only
         scores_json.append(s)
         score_objects.append(VendorScore(
@@ -449,9 +534,11 @@ def _job_evaluate() -> dict:
             missing_requirements=s["missing_requirements"], trace_id=s["trace_id"],
         ))
 
-    ranking = agent.rank(RankingInput(
+    ranking_artifact = agent.rank(RankingInput(
         tender_id=tender["tender_id"], policy=policy, vendor_scores=score_objects,
-    )).output
+    ))
+    _save_artifact(ranking_artifact.model_dump(mode="json"))
+    ranking = ranking_artifact.output
 
     # Map vendor_id -> display name so the ranked list can show names.
     names = {vd["submission"]["vendor_id"]: vd["vendor_name"] for vd in subs["submissions"]}
@@ -624,6 +711,12 @@ class SowReviewReq(BaseModel):
     scope_text: str
 
 
+class PopulateOptionalReq(BaseModel):
+    project_name: str = ""
+    scope_text: str
+    form_overrides: dict[str, Any] | None = None
+
+
 class ValidateReq(BaseModel):
     vendor_id: str = "VND-DEMO-001"
     cr_number: str
@@ -655,12 +748,22 @@ class RandomSessionReq(BaseModel):
     role: str
 
 
+class AccountSessionReq(BaseModel):
+    role: str
+    account_id: str
+
+
 class ProposalReq(BaseModel):
     vendor_id: str
     price_sar: float | None = None
     timeline_days: int | None = None
     technical_summary: str = ""
     commercial_summary: str = ""
+
+
+class ArtifactApprovalReq(BaseModel):
+    buyer_id: str
+    note: str | None = None
 
 
 # ── API: job-launching endpoints ─────────────────────────────────────────────────
@@ -705,6 +808,15 @@ async def start_draft_sow(
         overrides = _json.loads(form_overrides)
     job = _new_job("draft")
     _run_async(job, _job_full_draft, None, str(path), None, template, overrides, buyer_id)
+    return {"job_id": job.id}
+
+
+@app.post("/api/jobs/populate-optional-sections")
+def start_populate_optional_sections(req: PopulateOptionalReq):
+    if not req.scope_text.strip():
+        raise HTTPException(422, "Scope of Work is required to populate optional sections")
+    job = _new_job("populate optional sections")
+    _run_async(job, _job_populate_optional_sections, req.project_name, req.scope_text, req.form_overrides)
     return {"job_id": job.id}
 
 
@@ -765,6 +877,50 @@ def get_job(job_id: str):
     if not job:
         raise HTTPException(404, "job not found")
     return job.model_dump()
+
+
+@app.get("/api/artifacts")
+def artifacts(tender_id: str | None = None, vendor_id: str | None = None, limit: int = 100):
+    """Buyer audit view for persisted model outputs and decision history."""
+    from agents.artifact_store import list_artifacts
+
+    return {"artifacts": list_artifacts(tender_id=tender_id, vendor_id=vendor_id, limit=min(max(limit, 1), 500))}
+
+
+@app.get("/api/artifacts/{artifact_id}")
+def artifact_detail(artifact_id: str):
+    from agents.artifact_store import get_artifact
+
+    artifact = get_artifact(artifact_id)
+    if not artifact:
+        raise HTTPException(404, "artifact not found")
+    return {"artifact": artifact}
+
+
+@app.post("/api/artifacts/{artifact_id}/approve")
+def approve_artifact(artifact_id: str, req: ArtifactApprovalReq):
+    """Record a buyer's approval without allowing AI to approve itself."""
+    from agents.artifact_store import approve_artifact as approve_stored_artifact
+
+    artifact = approve_stored_artifact(artifact_id, buyer_id=req.buyer_id, note=req.note)
+    if not artifact:
+        raise HTTPException(404, "artifact not found")
+    published_tender = None
+    with _LOCK:
+        pending = _PENDING_TENDERS.pop(artifact_id, None)
+    if pending:
+        if pending.get("buyer_id") and pending["buyer_id"] != req.buyer_id:
+            with _LOCK:
+                _PENDING_TENDERS[artifact_id] = pending
+            raise HTTPException(403, "Only the draft's Buyer-Admin can publish it")
+        published_tender = _publish_tender_artifact(
+            pending["artifact"], pending["file_id"], pending["template"], req.buyer_id,
+        )
+    return {
+        "artifact": artifact,
+        "published_tender": published_tender,
+        "human_in_the_loop": "Buyer approval was recorded. Approved drafts are now visible to vendors; contract award remains a separate buyer-controlled action.",
+    }
 
 
 # ── API: synchronous endpoints ───────────────────────────────────────────────────
@@ -828,16 +984,48 @@ def random_session(req: RandomSessionReq):
         raise HTTPException(400, "role must be buyer or vendor")
     accounts = list_buyers() if role == "buyer" else list_vendors()
     account = random.choice(accounts)
+    return {"session": _demo_session(role, account, "random_demo_account")}
+
+
+def _demo_session(role: str, account: dict[str, Any], mode: str) -> dict[str, Any]:
     session = {
         "role": role,
         "account": account,
         "signed_in_at": datetime.now(timezone.utc).isoformat(),
-        "mode": "random_demo_account",
+        "mode": mode,
     }
     if role == "buyer":
         session["current_tender_id"] = f"TND-{account['account_id'].replace('BUY-', 'BUY')}-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:4].upper()}"
+    return session
+
+
+@app.post("/api/session/account")
+def account_session(req: AccountSessionReq):
+    """Choose a fixed demo account for repeatable buyer/vendor testing."""
+    from agents.reputation import get_buyer, get_vendor
+
+    role = req.role.strip().lower()
+    if role not in {"buyer", "vendor"}:
+        raise HTTPException(400, "role must be buyer or vendor")
+    account = get_buyer(req.account_id) if role == "buyer" else get_vendor(req.account_id)
+    if not account:
+        raise HTTPException(404, f"{role} account not found")
+    return {"session": _demo_session(role, account, "selected_demo_account")}
+
+
+@app.post("/api/demo/reset")
+def reset_demo_state():
+    """Clear volatile demo jobs, tenders, and proposals without deleting the audit trail."""
+    with _LOCK:
+        counts = {"jobs": len(_JOBS), "tenders": len(_TENDERS), "pending_tenders": len(_PENDING_TENDERS), "proposals": len(_PROPOSALS)}
+        _JOBS.clear()
+        _TENDERS.clear()
+        _PENDING_TENDERS.clear()
+        _PROPOSALS.clear()
     return {
-        "session": session
+        "cleared": counts,
+        "audit_trail": "preserved",
+        "message": "Demo state reset. Persisted AI artifacts and approval records were retained.",
     }
 
 
@@ -854,6 +1042,10 @@ def tender_feed(vendor_id: str | None = None):
                 (p for p in _PROPOSALS.values() if p["tender_id"] == tender["id"] and p["vendor_id"] == vendor_id),
                 None,
             )
+            # Buyer-only decision support: vendors may learn whether they are invited / a
+            # suggested match, but never see their own committee dossier or competing
+            # vendor profiles, scores, rankings, or recommendations.
+            tender.pop("shortlist", None)
     return {"tenders": tenders}
 
 

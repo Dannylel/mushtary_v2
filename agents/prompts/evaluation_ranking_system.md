@@ -36,6 +36,8 @@ before "{" or after "}". Use double quotes; no trailing commas. EXACT shape:
 }
 
 ## Quality bar
+- Each vendor summary must cite its decisive score components, risk level, and material evidence
+  gaps carried from isolated scoring. Do not say "strong proposal" without naming why.
 - ranks are consecutive integers starting at 1 with no gaps or duplicates.
 - recommendation names the top-ranked vendor, gives the decisive reasons, mentions material
   risks of the runner-up, and ends by noting buyer approval is required.

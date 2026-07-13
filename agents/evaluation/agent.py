@@ -12,7 +12,7 @@ import logging
 
 from agents.base import AIArtifact, BaseAgent
 from agents.guardrails import safe_parse
-from agents.llm_config import chat_with_usage
+from agents.llm_config import chat_json_with_usage
 
 from .prompts import (
     RANK_PROMPT_NAME,
@@ -68,13 +68,13 @@ class EvaluationRankerAgent(BaseAgent):
 
         input_snapshot = self.sanitize_input(payload.model_dump(mode="json"))
 
-        raw_text, usage = chat_with_usage(
+        raw_text, usage, _repair_used = chat_json_with_usage(
             [
                 {"role": "system", "content": SCORING_SYSTEM_PROMPT},
                 {"role": "user", "content": build_scoring_message(payload)},
             ],
             temperature=0.2,
-            max_tokens=2048,
+            max_tokens=3200,
         )
 
         vendor_score = self._parse_score(raw_text, payload, trace_id)
@@ -121,13 +121,13 @@ class EvaluationRankerAgent(BaseAgent):
             "policy": payload.policy.model_dump(mode="json"),
         }
 
-        raw_text, usage = chat_with_usage(
+        raw_text, usage, _repair_used = chat_json_with_usage(
             [
                 {"role": "system", "content": RANKING_SYSTEM_PROMPT},
                 {"role": "user", "content": build_ranking_message(payload.vendor_scores, payload.policy)},
             ],
             temperature=0.2,
-            max_tokens=2048,
+            max_tokens=2600,
         )
 
         ranked = self._parse_ranking(raw_text, payload, trace_id)

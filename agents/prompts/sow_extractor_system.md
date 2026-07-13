@@ -61,6 +61,11 @@ before "{" or after "}". Use double quotes; no trailing commas. EXACT structure:
 }
 
 ## Field notes
+- Preserve operational detail: do not compress multi-part requirements, acceptance criteria,
+  exclusions, dependencies, responsibilities, or deliverable contents into generic summaries.
+- Derive a deliverable only when it is directly necessary to execute or evidence the supplied
+  SOW. Never derive quantities, dates, thresholds, licenses, certifications, financial terms,
+  or legal facts.
 - estimated_value_sar: a number or null. performance_bond_required / onsite_required: true,
   false, or null when the document does not say.
 - evaluation_criteria weights: use the document's stated weights; if no weight is stated for a

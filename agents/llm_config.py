@@ -7,7 +7,7 @@ models or pointing at a remote endpoint never requires touching agent code.
 
 Environment variables (all optional — sensible local defaults applied):
     LLM_BASE_URL   OpenAI-compatible endpoint. Default: http://localhost:11434/v1 (Ollama)
-    LLM_MODEL      Model id/tag served by that endpoint. Default: qwen3:4b
+    LLM_MODEL      Model id/tag served by that endpoint. Default: qwen2.5:7b-instruct-q4_K_M
     LLM_API_KEY    API key. Local servers ignore it, but the openai SDK needs a non-empty
                    string. Default: "ollama".
 
@@ -15,11 +15,13 @@ Local-only by decision (2026-06-10): remote-provider key fallbacks (OPENAI_API_K
 gemini_API, OPENROUTER_API_KEY) were removed. To target a remote OpenAI-compatible
 endpoint later, set LLM_BASE_URL / LLM_MODEL / LLM_API_KEY explicitly.
 """
+import json
 import os
+import re
 
 # ── Local defaults (Ollama) ────────────────────────────────────────────────────
 DEFAULT_BASE_URL = "http://localhost:11434/v1"
-DEFAULT_MODEL = "qwen3:4b"
+DEFAULT_MODEL = "qwen2.5:7b-instruct-q4_K_M"
 DEFAULT_API_KEY = "ollama"
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 GEMINI_MODEL = "gemini-3.5-flash"
@@ -154,6 +156,7 @@ def _to_lc_messages(messages: list[dict]):
     )
 
     out = []
+    disable_thinking = get_provider() == "ollama" and get_model().lower().startswith("qwen3")
     for m in messages:
         role = m.get("role")
         content = m.get("content") or ""
@@ -164,6 +167,10 @@ def _to_lc_messages(messages: list[dict]):
         elif role == "tool":
             out.append(ToolMessage(content=content, tool_call_id=m.get("tool_call_id", "")))
         else:
+            # Qwen3 reasoning can consume a local generation budget and leave truncated
+            # JSON. These agents need the final auditable structure, not a long think trace.
+            if disable_thinking and not content.lstrip().startswith("/no_think"):
+                content = "/no_think\n" + content
             out.append(HumanMessage(content=content))
     return out
 
@@ -175,6 +182,94 @@ def chat_text(
 ) -> str | None:
     """Invoke the chat model on OpenAI-style messages and return the text content."""
     text, _ = chat_with_usage(messages, temperature=temperature, max_tokens=max_tokens)
+    return text
+
+
+def _json_object_from_text(raw: str | None) -> dict | None:
+    """Extract one JSON object from common local-model wrappers."""
+    if not raw:
+        return None
+    text = re.sub(r"<think>.*?</think>", "", raw, flags=re.S).strip()
+    if text.startswith("```"):
+        parts = text.split("```", 2)
+        text = parts[1] if len(parts) > 1 else text
+        text = re.sub(r"^json\s*", "", text.strip(), flags=re.I)
+    start, end = text.find("{"), text.rfind("}")
+    if start >= 0 and end > start:
+        text = text[start:end + 1]
+    try:
+        parsed = json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def repair_json_text(raw: str | None, output_contract: str, max_tokens: int | None = None) -> str | None:
+    """Repair an already-produced JSON response without re-running its business workflow."""
+    parsed = _json_object_from_text(raw)
+    if parsed is not None:
+        return json.dumps(parsed, ensure_ascii=False)
+    repaired, _ = chat_with_usage(
+        [
+            {"role": "system", "content": "You are a strict JSON repair service. Return one valid JSON object only; do not add facts or explanations."},
+            {"role": "user", "content": "OUTPUT CONTRACT:\n" + output_contract + "\n\nMALFORMED RESPONSE:\n" + str(raw or "") + "\n\nReturn repaired JSON only."},
+        ],
+        temperature=0.0,
+        max_tokens=max_tokens,
+    )
+    parsed = _json_object_from_text(repaired)
+    return json.dumps(parsed, ensure_ascii=False) if parsed is not None else raw
+
+
+def chat_json_with_usage(
+    messages: list[dict],
+    temperature: float = 0.4,
+    max_tokens: int | None = None,
+) -> tuple[str | None, dict, bool]:
+    """Return JSON text, repairing one malformed local-model response when necessary.
+
+    The original instructions already contain the output schema. The repair turn only
+    restores valid JSON and must not add facts or change the requested contract.
+    """
+    raw, usage = chat_with_usage(messages, temperature=temperature, max_tokens=max_tokens)
+    parsed = _json_object_from_text(raw)
+    if parsed is not None:
+        return json.dumps(parsed, ensure_ascii=False), usage, False
+
+    original_contract = next((m.get("content", "") for m in messages if m.get("role") == "system"), "")
+    repair_messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a strict JSON repair service. Return one valid JSON object only. "
+                "Do not add facts, explanations, markdown, or fields not required by the original contract."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                "ORIGINAL OUTPUT CONTRACT:\n" + original_contract +
+                "\n\nMALFORMED MODEL RESPONSE:\n" + str(raw or "") +
+                "\n\nRepair it into the required JSON object only."
+            ),
+        },
+    ]
+    repaired, repair_usage = chat_with_usage(repair_messages, temperature=0.0, max_tokens=max_tokens)
+    combined_usage = {
+        "input_tokens": usage.get("input_tokens", 0) + repair_usage.get("input_tokens", 0),
+        "output_tokens": usage.get("output_tokens", 0) + repair_usage.get("output_tokens", 0),
+    }
+    parsed = _json_object_from_text(repaired)
+    return (json.dumps(parsed, ensure_ascii=False) if parsed is not None else raw, combined_usage, True)
+
+
+def chat_json_text(
+    messages: list[dict],
+    temperature: float = 0.4,
+    max_tokens: int | None = None,
+) -> str | None:
+    """JSON-oriented variant of chat_text with one automatic repair attempt."""
+    text, _, _ = chat_json_with_usage(messages, temperature=temperature, max_tokens=max_tokens)
     return text
 
 

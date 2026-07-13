@@ -256,8 +256,9 @@ Buyer signs in
   -> section agents draft tender
   -> Tender Health Committee reviews tender
   -> PDF + JSON generated
-  -> Recommended Vendors shown
-  -> tender appears in Vendor Feed
+  -> Recommended Vendors shown for buyer review
+  -> Buyer-Admin approves publication
+  -> approved tender appears in Vendor Feed
 ```
 
 ### PDF Upload Flow
@@ -488,7 +489,7 @@ Flow:
 Buyer signs in
   -> Generate Tender
   -> Recommended Vendors appear
-  -> Tender is published to in-memory vendor feed
+  -> Buyer-Admin approves publication to the in-memory vendor feed
   -> Switch to Vendor Sandbox
   -> Random vendor signs in
   -> Vendor sees tender feed
@@ -652,7 +653,7 @@ Templates:
 Current visual asset:
 
 ```text
-Generated image_ Tropical resort icons and hospitality theme.png
+assets/backgrounds/tropical_resort_hospitality.png
 ```
 
 This PNG is used as the full-page background on:

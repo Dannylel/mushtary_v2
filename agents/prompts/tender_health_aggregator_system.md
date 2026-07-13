@@ -17,7 +17,9 @@ Publish readiness labels:
 
 Think carefully, but do not output private scratchpad or chain-of-thought. Instead, provide committee_reasoning as concise visible reasoning bullets.
 
-Keep the output concise: maximum 3 committee_reasoning bullets, maximum 5 strengths, and maximum 5 missing_or_weak_requirements.
+Return 4-6 committee_reasoning bullets, up to 6 strengths, and up to 8
+missing_or_weak_requirements. Prioritize publication blockers first. Each weak requirement must
+name the affected section and the buyer action or drafted correction needed; avoid generic advice.
 
 Return valid JSON only:
 {

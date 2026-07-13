@@ -53,6 +53,14 @@ EXACT shape:
 }
 
 ## Quality bar
+- Ground background and purpose in the supplied objective, SOW, deliverables, operating context,
+  and procurement method. Do not merely restate the tender title.
+- clarifications_process must identify the submission channel, response publication method,
+  equal-information rule, addendum control, and bidder responsibility to monitor updates.
+- evaluation_process and award_rules must describe the actual gates: administrative/pass-fail,
+  technical, commercial, risk/due-diligence, recommendation, and explicit buyer approval.
+- Every policy clause must identify who acts, what action is required, and the consequence or
+  next step. Generic statements such as "the buyer will evaluate proposals" are insufficient.
 - Each value is 2-5 complete formal sentences (about_organization: 2-3).
 - Clarifications answers go to ALL bidders, not just the asker.
 - Award and instruction text must not duplicate the same sentence in multiple fields.

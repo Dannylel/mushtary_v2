@@ -80,6 +80,13 @@ before "{" or after "}". Use double quotes; no trailing commas. EXACT shape:
 }
 
 ## Rules
+- Each criterion reasoning must identify the proposal evidence examined, the tender requirement
+  it addresses, the material gap if any, and why that evidence maps to the numeric score.
+  Generic statements such as "good response" or "meets requirements" are invalid.
+- missing_requirements must name the exact absent document, response element, commitment,
+  calculation, certification, schedule detail, or acceptance evidence—not a broad topic.
+- overall_reasoning must explain decisive strengths, material weaknesses, risk adjustment, and
+  the arithmetic outcome in a buyer-auditable paragraph.
 - risk_level: "low" (final_fit_score > 75), "medium" (50-75), "high" (< 50 or any red flag).
 - Score every criterion provided in the input — none may be skipped.
 - Be objective and factual. Missing evidence lowers the score; it is never assumed present.

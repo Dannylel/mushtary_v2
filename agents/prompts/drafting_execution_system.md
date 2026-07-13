@@ -52,6 +52,14 @@ EXACT shape:
 }
 
 ## Quality bar
+- reporting_requirements must state report purpose, minimum contents, recipient/review route,
+  evidence source, and frequency only when supplied or safely event-based.
+- approval_process must distinguish submission, completeness review, technical review, comments,
+  resubmission, acceptance/rejection, and the authoritative Mushtarry platform record.
+- Every team role must have distinct responsibilities tied to this SOW. Use buyer-supplied
+  experience values; otherwise require capability evidence without inventing years.
+- Derived deliverables must identify minimum contents, acceptance evidence, and relationship to
+  a scope workstream or milestone.
 - Health-score safeguards: deliverables must never be empty when a scope of work exists.
   If the buyer did not list deliverables explicitly, derive practical deliverables directly
   from the scope, such as work plan, service delivery plan, quality checklist/report,

@@ -16,7 +16,7 @@ Schema per entry:
 REGISTRY: dict[str, dict] = {
     "vendor_validation_v1": {
         "name": "vendor_validation_v1",
-        "version": "1.1.0",
+        "version": "1.2.0",
         "intent": (
             "Reason over vendor registration data and tool results "
             "to produce a structured validation outcome."
@@ -47,7 +47,7 @@ REGISTRY: dict[str, dict] = {
     },
     "tender_draft_v2": {
         "name": "tender_draft_v2",
-        "version": "3.2.0",
+        "version": "3.3.0",
         "intent": (
             "Generate a full RFP tender draft from a TenderBuyerForm via four parallel "
             "section prompts (context, scope, execution, legal/eval), assembled into one "
@@ -72,7 +72,7 @@ REGISTRY: dict[str, dict] = {
     },
     "sow_extract_v1": {
         "name": "sow_extract_v1",
-        "version": "1.1.0",
+        "version": "1.2.0",
         "intent": (
             "Extract a structured TenderBuyerForm from raw SoW/RFP document text "
             "so the drafting pipeline can run from an uploaded PDF."
@@ -88,7 +88,7 @@ REGISTRY: dict[str, dict] = {
     },
     "form_generator_v1": {
         "name": "form_generator_v1",
-        "version": "1.2.0",
+        "version": "1.3.0",
         "intent": (
             "Autonomously invent a complete, internally-consistent TenderBuyerForm "
             "from a short seed (or nothing), standing in for a real buyer."
@@ -101,7 +101,7 @@ REGISTRY: dict[str, dict] = {
     },
     "vendor_score_v1": {
         "name": "vendor_score_v1",
-        "version": "2.1.0",
+        "version": "2.2.0",
         "intent": (
             "Score a single vendor submission against tender evaluation criteria. "
             "Runs in isolation — agent never sees other vendors' submissions."
@@ -125,7 +125,7 @@ REGISTRY: dict[str, dict] = {
     },
     "evaluation_rank_v1": {
         "name": "evaluation_rank_v1",
-        "version": "2.1.0",
+        "version": "2.2.0",
         "intent": (
             "Aggregate per-vendor scores into a ranked recommendation list "
             "with an explainability summary for the buyer."
@@ -142,7 +142,7 @@ REGISTRY: dict[str, dict] = {
     },
     "tender_health_scope_v1": {
         "name": "tender_health_scope_v1",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "intent": "Review tender scope clarity, deliverables, milestones, and responsibility clarity.",
         "agent": "TenderHealthCommittee / Scope Clarity Agent",
         "inputs": ["buyer_form", "tender_draft"],
@@ -152,7 +152,7 @@ REGISTRY: dict[str, dict] = {
     },
     "tender_health_commercial_v1": {
         "name": "tender_health_commercial_v1",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "intent": "Review pricing clarity, payment terms, commercial proposal requirements, bonds, and evaluation commercial logic.",
         "agent": "TenderHealthCommittee / Commercial Clarity Agent",
         "inputs": ["buyer_form", "tender_draft"],
@@ -162,7 +162,7 @@ REGISTRY: dict[str, dict] = {
     },
     "tender_health_compliance_v1": {
         "name": "tender_health_compliance_v1",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "intent": "Review eligibility, document requirements, submission governance, compliance terms, and approval controls.",
         "agent": "TenderHealthCommittee / Compliance Readiness Agent",
         "inputs": ["buyer_form", "tender_draft"],
@@ -172,7 +172,7 @@ REGISTRY: dict[str, dict] = {
     },
     "tender_health_participation_v1": {
         "name": "tender_health_participation_v1",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "intent": "Estimate vendor question risk and likely participation based on tender clarity and burden.",
         "agent": "TenderHealthCommittee / Vendor Participation Agent",
         "inputs": ["buyer_form", "tender_draft", "specialist_health_agent_outputs"],
@@ -182,13 +182,23 @@ REGISTRY: dict[str, dict] = {
     },
     "tender_health_aggregator_v1": {
         "name": "tender_health_aggregator_v1",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "intent": "Aggregate specialist health-agent scores into final tender quality, readiness, and improvement summary.",
         "agent": "TenderHealthCommittee / Aggregator Agent",
         "inputs": ["specialist_health_agent_outputs", "tender_metadata"],
         "outputs": ["tender_quality_score", "publish_readiness", "committee_reasoning", "strengths", "missing_or_weak_requirements"],
         "model": "local (configurable via LLM_MODEL env var)",
         "notes": "Uses weighted specialist scores; advisory only; falls back to deterministic aggregation if the local model fails.",
+    },
+    "vendor_committee_v1": {
+        "name": "vendor_committee_v1",
+        "version": "1.1.0",
+        "intent": "Assess one vendor's submitted proposal against tender requirements through a buyer-only specialist committee.",
+        "agent": "VendorCommittee LangGraph",
+        "inputs": ["tender_requirements", "vendor_profile", "submitted_proposal", "deterministic_baseline"],
+        "outputs": ["five specialist assessments", "committee recommendation", "buyer questions"],
+        "model": "local (configurable via LLM_MODEL env var)",
+        "notes": "Deterministic eligibility gates remain authoritative. Advisory output is never shown to vendors.",
     },
 }
 

@@ -13,7 +13,7 @@ import re
 from pathlib import Path
 
 from agents.base import BaseAgent
-from agents.llm_config import chat_text
+from agents.llm_config import chat_json_text
 from agents.buyer_form import (
     Deliverable,
     EvaluationCriteria,
@@ -254,8 +254,25 @@ def _normalize_extraction_data(data: dict, source_text: str, fallback: TenderBuy
 
     if not isinstance(data.get("deliverables"), list) or not data.get("deliverables"):
         data["deliverables"] = [d.model_dump() for d in _derive_deliverables(data.get("scope_of_work") or source_text)]
+    else:
+        data["deliverables"] = [
+            {
+                "name": _text_value(item.get("name"), "Deliverable") if isinstance(item, dict) else _text_value(item, "Deliverable"),
+                "description": _text_value(item.get("description"), "Details to be confirmed during buyer review.") if isinstance(item, dict) else _text_value(item, "Details to be confirmed during buyer review."),
+                "format": _text_value(item.get("format")) if isinstance(item, dict) else None,
+            }
+            for item in data["deliverables"]
+        ]
     if not isinstance(data.get("timeline"), list) or not data.get("timeline"):
         data["timeline"] = [t.model_dump() for t in fallback.timeline]
+    else:
+        data["timeline"] = [
+            {
+                "milestone": _text_value(item.get("milestone") or item.get("name"), "Project milestone") if isinstance(item, dict) else _text_value(item, "Project milestone"),
+                "date": _text_value(item.get("date") or item.get("target_date"), "As per buyer-approved plan") if isinstance(item, dict) else "As per buyer-approved plan",
+            }
+            for item in data["timeline"]
+        ]
     if not isinstance(data.get("roles_and_responsibilities"), list) or not data.get("roles_and_responsibilities"):
         data["roles_and_responsibilities"] = [r.model_dump() for r in fallback.roles_and_responsibilities]
     return data
@@ -321,13 +338,13 @@ class SoWExtractorAgent(BaseAgent):
 
         raw_text = build_focused_sow_text(raw_text, max_chars=12000)
 
-        raw_output = chat_text(
+        raw_output = chat_json_text(
             [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": build_user_message(raw_text, hint_category)},
             ],
             temperature=0.2,
-            max_tokens=3000,
+            max_tokens=4200,
         )
 
         form = self._parse_output(raw_output, trace_id, raw_text)

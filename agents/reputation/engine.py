@@ -6,7 +6,6 @@ from typing import Any
 
 from agents.categories import CATEGORIES
 
-
 VRI_WEIGHTS = {
     "performance_rating": 0.20,
     "compliance_and_licenses": 0.15,
@@ -457,17 +456,23 @@ def shortlist_vendors(raw: dict[str, Any] | None = None) -> dict[str, Any]:
         "medium_match": [v for v in eligible if 65 <= v["fit_score"] < 80],
         "low_match": [v for v in eligible if v["fit_score"] < 65],
     }
+    # Shortlisting is intentionally pre-proposal: it only uses objective eligibility
+    # and profile-fit signals. The LLM Tender Committee runs later, when an actual
+    # proposal supplies price, timeline, and technical/commercial evidence.
     top_three = eligible[:3]
+    tender_context = {
+        "category": req.category,
+        "subcategory": req.subcategory,
+        "estimated_value_sar": req.estimated_value_sar,
+        "timeline_days": req.timeline_days,
+        "required_certifications": list(req.required_certifications),
+        "minimum_years_experience": req.minimum_years_experience,
+        "minimum_similar_projects": req.minimum_similar_projects,
+        "local_presence_required": req.local_presence_required,
+        "required_sector_license": req.required_sector_license,
+    }
     return {
-        "tender": {
-            "category": req.category,
-            "subcategory": req.subcategory,
-            "estimated_value_sar": req.estimated_value_sar,
-            "timeline_days": req.timeline_days,
-            "required_certifications": list(req.required_certifications),
-            "minimum_years_experience": req.minimum_years_experience,
-            "minimum_similar_projects": req.minimum_similar_projects,
-        },
+        "tender": tender_context,
         "counts": {
             "potential_eligible_vendors_found": len(eligible),
             "high_match_vendors": len(buckets["high_match"]),
@@ -481,6 +486,7 @@ def shortlist_vendors(raw: dict[str, Any] | None = None) -> dict[str, Any]:
         "excluded": excluded,
         "ai_recommendation_layer": _ai_recommendation_layer(top_three),
         "committee": _committee_summary(top_three),
+        "committee_scope": "Profile shortlist only. The LLM Tender Committee runs after a vendor submits a proposal.",
         "human_in_the_loop": "AI recommends only. Buyer approval is required before any award.",
     }
 

@@ -2,7 +2,7 @@
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
-const esc = (s) => String(s ?? "").replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 const DOC_TYPES = [
   ["commercial_registration", "Commercial Registration"],
@@ -62,6 +62,34 @@ function parseResponsibilities(id) {
   })).filter(row => row.party && row.responsibilities.length);
 }
 
+function addEditableRow(tableId, values = []) {
+  const table = document.getElementById(tableId);
+  if (!table) return;
+  const cells = table.querySelectorAll("thead th").length - 1;
+  const row = document.createElement("tr");
+  row.innerHTML = Array.from({ length: cells }, (_, index) =>
+    `<td><input value="${esc(values[index] || "")}" /></td>`
+  ).join("") + '<td><button type="button" class="table-remove" title="Remove row">Remove</button></td>';
+  $(".table-remove", row).addEventListener("click", () => row.remove());
+  $("tbody", table).appendChild(row);
+}
+
+function tableRows(tableId, columns) {
+  const table = document.getElementById(tableId);
+  if (!table) return [];
+  return $$("tbody tr", table).map(row => {
+    const values = $$("input", row).map(input => input.value.trim());
+    return columns.reduce((item, column, index) => ({ ...item, [column]: values[index] || "" }), {});
+  }).filter(row => Object.values(row).some(Boolean));
+}
+
+function replaceEditableRows(tableId, rows, columns) {
+  const table = document.getElementById(tableId);
+  if (!table) return;
+  $("tbody", table).innerHTML = "";
+  (rows || []).forEach(row => addEditableRow(tableId, columns.map(column => row?.[column] || "")));
+}
+
 function parseDocumentRequirements(id, level) {
   return checkedLabels(`${id} input[type="checkbox"]`).map(name => ({
     name,
@@ -102,8 +130,8 @@ function collectDraftOverrides() {
     scope_of_work: value("#draftScope") || undefined,
     technical_requirements: value("#draftTechnicalRequirements") || undefined,
     methodology_requirements: value("#draftMethodologyRequirements") || undefined,
-    deliverables: parseDelimitedRows("#draftDeliverables", ["name", "description", "format"]),
-    timeline: parseDelimitedRows("#draftTimeline", ["milestone", "date"]),
+    deliverables: tableRows("draftDeliverablesTable", ["name", "description", "format"]),
+    timeline: tableRows("draftTimelineTable", ["milestone", "date"]),
     roles_and_responsibilities: parseResponsibilities("#draftResponsibilities"),
     issue_date: value("#draftIssueDate") || undefined,
     clarification_deadline: value("#draftClarificationDate") || undefined,
@@ -350,11 +378,59 @@ async function signInRandom(role) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ role }),
   }).then(r => r.json());
-  currentSession = data.session;
-  localStorage.setItem("mushtaryDemoSession", JSON.stringify(currentSession));
-  if (role === "buyer") localStorage.setItem("mushtaryLastBuyerSession", JSON.stringify(currentSession));
-  renderSession();
+  setDemoSession(data.session);
   show(role === "vendor" ? "vendor-feed" : "overview");
+}
+
+function setDemoSession(session) {
+  currentSession = session;
+  localStorage.setItem("mushtaryDemoSession", JSON.stringify(currentSession));
+  if (currentSession.role === "buyer") localStorage.setItem("mushtaryLastBuyerSession", JSON.stringify(currentSession));
+  renderSession();
+}
+
+async function signInSelected(role) {
+  const select = role === "buyer" ? $("#signinBuyerSelect") : $("#signinVendorSelect");
+  const account_id = select?.value;
+  if (!account_id) return;
+  const response = await fetch("/api/session/account", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ role, account_id }),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || "Could not select demo account.");
+  setDemoSession(data.session);
+  show(role === "vendor" ? "vendor-feed" : "overview");
+}
+
+async function loadDemoAccounts() {
+  const [buyersResult, vendorsResult] = await Promise.all([
+    fetch("/api/accounts/buyers").then(r => r.json()),
+    fetch("/api/accounts/vendors").then(r => r.json()),
+  ]);
+  const fill = (select, accounts, label) => {
+    if (!select) return;
+    select.innerHTML = `<option value="">Select ${label}…</option>` + (accounts || []).map(account =>
+      `<option value="${esc(account.account_id)}">${esc(account.account_id)} — ${esc(account.name)}</option>`
+    ).join("");
+  };
+  fill($("#signinBuyerSelect"), buyersResult.buyers, "buyer");
+  fill($("#signinVendorSelect"), vendorsResult.vendors, "vendor");
+}
+
+async function resetDemoState() {
+  if (!confirm("Reset demo jobs, tenders, and proposals? Persisted AI audit records will remain.")) return;
+  const response = await fetch("/api/demo/reset", { method: "POST" });
+  const data = await response.json();
+  if (!response.ok) {
+    alert(data.detail || "Could not reset demo state.");
+    return;
+  }
+  lastDraftResult = null;
+  selectedVendorTenderId = null;
+  alert(data.message || "Demo state reset.");
+  show(sessionRole() === "vendor" ? "vendor-feed" : "overview");
 }
 
 function returnToLastBuyer() {
@@ -388,11 +464,14 @@ function restoreSession() {
 
 $("#signinBuyerBtn")?.addEventListener("click", () => signInRandom("buyer"));
 $("#signinVendorBtn")?.addEventListener("click", () => signInRandom("vendor"));
+$("#signinSelectedBuyerBtn")?.addEventListener("click", () => signInSelected("buyer").catch(e => alert(e.message)));
+$("#signinSelectedVendorBtn")?.addEventListener("click", () => signInSelected("vendor").catch(e => alert(e.message)));
 $("#switchSessionBtn")?.addEventListener("click", () => {
   localStorage.removeItem("mushtaryDemoSession");
   currentSession = null;
   renderSession();
 });
+$("#resetDemoBtn")?.addEventListener("click", resetDemoState);
 
 const consoleEl = $("#console"), consoleBody = $("#consoleBody"),
       consoleDot = $("#consoleDot"), consoleSub = $("#consoleSub");
@@ -903,8 +982,8 @@ function renderDraft(result) {
     sub("General Requirements", ul(scope.general_requirements))));
 
   // 10. Deliverables
-  const delItems = (dels.deliverables || []).map(d =>
-    `<div class="doc-item"><b>${esc(d.name)}</b><span>${esc(d.description || "")}${d.format ? " · Format: " + esc(d.format) : ""}${d.deadline_note ? " · " + esc(d.deadline_note) : ""}</span></div>`).join("");
+  const delItems = `<table class="draft-data-table"><thead><tr><th>Deliverable</th><th>Description / acceptance output</th><th>Format</th><th>Deadline</th></tr></thead><tbody>${(dels.deliverables || []).map(d =>
+    `<tr><td><b>${esc(d.name)}</b></td><td>${esc(d.description || "-")}</td><td>${esc(d.format || "-")}</td><td>${esc(d.deadline_note || "-")}</td></tr>`).join("")}</tbody></table>`;
   const tiers = (dels.escalation_tiers || []).map(t =>
     `<div class="milestone-row"><span>${esc(t.level)}</span><span class="muted2">${esc(t.trigger_delay)}</span><span>${esc(t.contact_role)}</span></div>`).join("");
   sections.push(block(10, "Deliverables",
@@ -915,8 +994,8 @@ function renderDraft(result) {
     sub("Escalation Matrix", tiers)));
 
   // 11. Timeline
-  const miles = (tl.milestones || []).map(m =>
-    `<div class="milestone-row"><span class="muted2">${esc(m.phase)}</span><span><b>${esc(m.milestone)}</b></span><span>${esc(m.target_date)}</span></div>`).join("");
+  const miles = `<table class="draft-data-table"><thead><tr><th>Phase</th><th>Milestone</th><th>Target date / timing</th></tr></thead><tbody>${(tl.milestones || []).map(m =>
+    `<tr><td>${esc(m.phase || "-")}</td><td><b>${esc(m.milestone)}</b></td><td>${esc(m.target_date)}</td></tr>`).join("")}</tbody></table>`;
   sections.push(block(11, "Timeline",
     para(tl.total_duration) +
     sub("Project Phases", ul(tl.project_phases)) +
@@ -974,7 +1053,7 @@ function renderDraft(result) {
       ${fid ? `<a class="btn primary" href="/api/download/${fid}/pdf?template=${encodeURIComponent(activeTemplate)}" target="_blank">⬇ Download ${esc(PDF_TEMPLATES.find(([v]) => v === activeTemplate)?.[1] || "PDF")}</a>
       ${PDF_TEMPLATES.filter(([v]) => v !== activeTemplate).map(([v, label]) => `<a class="btn ghost" href="/api/download/${fid}/pdf?template=${encodeURIComponent(v)}" target="_blank">⬇ ${esc(label)}</a>`).join("")}
       <a class="btn ghost" href="/api/download/${fid}/json" target="_blank">⬇ JSON</a>` : ""}
-      ${result.published_tender ? `<button class="btn ghost" onclick="switchToVendorSandbox()">Switch to Vendor Sandbox</button>` : ""}
+      ${result.artifact?.id ? `<button class="btn primary" onclick="approveTenderDraft('${esc(result.artifact.id)}')">Approve & Publish to Vendor Feed</button>` : ""}
     </div>
     <div id="draftVendorRecommendations" class="section-block">
       <div class="sb-head"><span class="num">V</span>Recommended Vendors</div>
@@ -1000,6 +1079,20 @@ function shortlistPayloadFromForm(form) {
     local_presence_required: !!form.local_presence_required,
     required_sector_license: form.required_sector_license || null,
   };
+}
+
+async function approveTenderDraft(artifactId) {
+  if (sessionRole() !== "buyer") return;
+  const response = await fetch(`/api/artifacts/${encodeURIComponent(artifactId)}/approve`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ buyer_id: sessionAccountId(), note: "Approved by Buyer-Admin in demo" }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    $("#draftResult").insertAdjacentHTML("afterbegin", errorHTML(data.detail || "Could not approve this draft."));
+    return;
+  }
+  $("#draftResult").insertAdjacentHTML("afterbegin", `<div class="result ok-result"><b>Tender approved and published.</b> It is now visible in the Vendor Tender Feed.</div>`);
 }
 
 async function loadDraftVendorRecommendations(form) {
@@ -1061,6 +1154,53 @@ $("#reviewSowBtn").addEventListener("click", () => {
         $("#draftScope").value = rewritten;
       }
       return renderSowReview(result);
+    },
+  });
+});
+
+$$('[data-add-row]').forEach(button => button.addEventListener("click", () => addEditableRow(button.dataset.addRow)));
+
+function applyPopulatedOptionalSections(form) {
+  const setIfBlank = (selector, next) => {
+    const input = $(selector);
+    if (input && !input.value.trim() && next) input.value = next;
+  };
+  setIfBlank("#draftProjectObjective", form.project_objective);
+  setIfBlank("#draftTechnicalRequirements", form.technical_requirements);
+  setIfBlank("#draftMethodologyRequirements", form.methodology_requirements);
+  setIfBlank("#draftResponsibilities", (form.roles_and_responsibilities || []).map(r => `${r.party} | ${(r.responsibilities || []).join("; ")}`).join("\n"));
+  setIfBlank("#draftEvaluationCriteria", (form.evaluation_criteria || []).map(c => `${c.name} | ${c.weight} | ${c.description}`).join("\n"));
+  setIfBlank("#draftTechnicalEvalParams", (form.technical_evaluation_parameters || []).join("\n"));
+  setIfBlank("#draftFinancialEvalParams", (form.financial_evaluation_parameters || []).join("\n"));
+  if (!tableRows("draftDeliverablesTable", ["name", "description", "format"]).length) {
+    replaceEditableRows("draftDeliverablesTable", form.deliverables, ["name", "description", "format"]);
+  }
+  if (!tableRows("draftTimelineTable", ["milestone", "date"]).length) {
+    replaceEditableRows("draftTimelineTable", form.timeline, ["milestone", "date"]);
+  }
+}
+
+$("#populateOptionalBtn").addEventListener("click", () => {
+  const scope_text = value("#draftScope");
+  if (!scope_text) {
+    $("#draftResult").innerHTML = errorHTML("Enter a Scope of Work before populating optional sections.");
+    return;
+  }
+  runJob({
+    target: "#draftResult",
+    loadMain: "Populating optional tender sections...",
+    loadSub: "Deriving editable deliverables, timeline, requirements, responsibilities, and evaluation inputs",
+    start: () => fetch("/api/jobs/populate-optional-sections", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project_name: value("#draftTenderTitle"), scope_text, form_overrides: collectDraftOverrides() }),
+    }).then(async response => {
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Could not populate optional sections.");
+      return data;
+    }),
+    render: result => {
+      applyPopulatedOptionalSections(result.form || {});
+      return `<div class="result ok-result"><b>Optional sections populated.</b> Review the editable tables and text before generating the tender.</div>`;
     },
   });
 });
@@ -1634,6 +1774,10 @@ async function submitDemoProposal(tenderId) {
 function renderProposalComparisonCard(comparison) {
   const tender = comparison.tender || {};
   const ranking = comparison.ranking || [];
+  const recommended = comparison.recommended_vendor || null;
+  const approvalButton = recommended?.committee_artifact_id && recommended?.committee_approval_status !== "APPROVED"
+    ? `<button class="btn primary" style="margin-top:12px" onclick="approveCommitteeArtifact('${esc(recommended.committee_artifact_id)}')">Approve AI Committee Recommendation</button>`
+    : (recommended?.committee_approval_status === "APPROVED" ? `<span class="badge approved dot">Committee recommendation approved</span>` : "");
   const rows = ranking.map(v => `<div class="vendor-card">
     <div class="vc-head">
       <div style="display:flex;align-items:center;gap:12px">
@@ -1672,6 +1816,7 @@ function renderProposalComparisonCard(comparison) {
           </div>
           <span class="badge draft dot">Buyer decides</span>
         </div>
+        ${approvalButton}
       </div>
       ${rows || "<p class='empty'>No submitted vendor proposals for this tender yet.</p>"}
     </div>
@@ -1706,9 +1851,25 @@ async function loadBuyerProposalComparison() {
   }
 }
 
+async function approveCommitteeArtifact(artifactId) {
+  if (sessionRole() !== "buyer") return;
+  const response = await fetch(`/api/artifacts/${encodeURIComponent(artifactId)}/approve`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ buyer_id: sessionAccountId(), note: "Approved from buyer proposal comparison" }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    alert(data.detail || "Could not record approval.");
+    return;
+  }
+  await loadBuyerProposalComparison();
+}
+
 window.submitDemoProposal = submitDemoProposal;
 window.returnToLastBuyer = returnToLastBuyer;
 window.switchToVendorSandbox = switchToVendorSandbox;
+window.approveCommitteeArtifact = approveCommitteeArtifact;
 
 $("#refreshReputationBtn")?.addEventListener("click", loadReputationHub);
 $("#shortlistBtn")?.addEventListener("click", runVendorShortlist);
@@ -1741,6 +1902,7 @@ async function kbSearch() {
 (async function init() {
   restoreSession();
   buildDocChips();
+  try { await loadDemoAccounts(); } catch (e) { console.warn("demo account list load failed", e); }
   // Seed the activity poll position so old events aren't replayed on page load.
   try {
     const a = await fetch("/api/activity?since=0").then(r => r.json());

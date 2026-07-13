@@ -5,7 +5,7 @@ Generates Project Overview, Objectives, and Scope of Work for ANY procurement
 category by reasoning over the buyer's brief. Nothing here is hardcoded to a
 specific sector; the buyer form is the only source of facts.
 
-On LLM failure it falls back to a minimal draft derived directly from the buyer's
+On LLM failure it falls back to a detailed draft derived directly from the buyer's
 own inputs (never invented), so the PDF is never blank.
 """
 
@@ -87,6 +87,11 @@ def _as_dict(value: Any) -> dict:
 
 
 def _scope_fallback(form: TenderBuyerForm) -> ScopeSections:
+    scope_text = form.scope_of_work or form.project_objective or "the approved buyer scope"
+    technical = form.technical_requirements or "The vendor shall translate the approved scope into a detailed, buyer-reviewable technical response."
+    methodology = form.methodology_requirements or "The vendor shall submit a delivery methodology, quality plan, risk register, and handover approach for buyer review."
+    from agents.tender_drafting.schemas import ScopePhase
+
     """Minimal draft built ONLY from buyer inputs — used if the LLM output is unusable."""
     return ScopeSections(
         project_overview=ProjectOverview(
@@ -100,18 +105,48 @@ def _scope_fallback(form: TenderBuyerForm) -> ScopeSections:
         objectives=Objectives(
             business_goals=[form.project_objective] if form.project_objective else [],
             expected_outcomes=[d.description for d in (form.deliverables or []) if d.description],
-            kpis=[],
+            kpis=[
+                "Deliverable completeness measured against the buyer-approved deliverable and evidence checklist at each acceptance review.",
+                "Buyer comments resolved and evidenced before final acceptance and handover.",
+            ],
         ),
         scope_of_work=ScopeOfWork(
             categories=[
                 ScopeCategory(
-                    name="Scope of Work",
-                    description=form.scope_of_work or "As described in the buyer brief.",
-                    requirements=list(form.eligibility_criteria or []),
-                )
+                    name="Core Scope Delivery",
+                    description=scope_text,
+                    requirements=[
+                        f"The vendor shall execute and document the following buyer-defined scope: {scope_text}",
+                        f"The technical proposal shall address these requirements and identify compliance evidence: {technical}",
+                        f"The delivery approach shall include these methodology controls: {methodology}",
+                    ],
+                ),
+                ScopeCategory(
+                    name="Quality, Testing, and Acceptance",
+                    description="Each output shall be complete, verified, and supported by evidence suitable for buyer acceptance.",
+                    requirements=[
+                        "The vendor shall map every deliverable to review steps, verification evidence, responsible roles, and an acceptance record.",
+                        "Rejected or incomplete work shall be corrected and resubmitted with a response to buyer comments before acceptance.",
+                    ],
+                ),
+                ScopeCategory(
+                    name="Reporting, Documentation, and Handover",
+                    description="The vendor shall maintain auditable delivery records and complete an orderly platform-controlled handover.",
+                    requirements=[
+                        "The vendor shall maintain progress, issue, risk, decision, and deliverable records sufficient for buyer oversight.",
+                        "Final handover shall include buyer-listed deliverables, approved records, unresolved-item status, and knowledge-transfer evidence where applicable.",
+                    ],
+                ),
             ],
-            phases=[],
-            general_requirements=[],
+            phases=[
+                ScopePhase(phase="Mobilization and Planning", activities=["Confirm scope inputs, responsibilities, risks, delivery controls, and the buyer-reviewable work plan."]),
+                ScopePhase(phase="Execution and Quality Control", activities=["Perform the approved scope, maintain evidence, manage issues, and submit outputs through the platform."]),
+                ScopePhase(phase="Acceptance and Handover", activities=["Resolve comments, complete acceptance evidence, transfer documentation, and close obligations."]),
+            ],
+            general_requirements=[
+                "All submissions, approvals, comments, revisions, and acceptance records shall be controlled through the Mushtarry platform.",
+                "The vendor shall identify assumptions, dependencies, exclusions, and buyer inputs affecting price, timing, or acceptance before execution.",
+            ],
         ),
     )
 
@@ -126,7 +161,7 @@ class ScopeSectionAgent(BaseSectionAgent):
         )
         user = f"{ref}\n{_build_user_message(form)}" if ref else _build_user_message(form)
 
-        data = self._generate(SYSTEM_PROMPT, user, max_tokens=2800)
+        data = self._generate(SYSTEM_PROMPT, user, max_tokens=4000)
         if not data:
             return _scope_fallback(form)
 
@@ -171,6 +206,18 @@ class ScopeSectionAgent(BaseSectionAgent):
                     activities=_as_str_list(p.get("activities")),
                 )
             )
+
+        # A small local model may return valid JSON while ignoring the requested minimum
+        # phase count. Preserve its useful phases and fill only the missing lifecycle gates
+        # from the detailed buyer-grounded fallback.
+        if len(phases) < 3:
+            existing = {p.phase.strip().lower() for p in phases}
+            for fallback_phase in fb.scope_of_work.phases:
+                if fallback_phase.phase.strip().lower() not in existing:
+                    phases.append(fallback_phase)
+                    existing.add(fallback_phase.phase.strip().lower())
+                if len(phases) >= 3:
+                    break
 
         scope_of_work = ScopeOfWork(
             categories=categories or fb.scope_of_work.categories,

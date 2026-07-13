@@ -15,8 +15,7 @@ from fpdf.enums import XPos, YPos
 
 OUTPUT_PDF = Path("outputs") / "tender_draft.pdf"
 DEFAULT_LOGO_PATH = Path("assets") / "buyer_logo.png"
-RESORT_BACKGROUND_PATH = Path("Generated image_ Tropical resort icons and hospitality theme.png")
-COVER_BACKGROUND_PATH = Path("image.png")
+RESORT_BACKGROUND_PATH = Path("assets") / "backgrounds" / "tropical_resort_hospitality.png"
 PDF_FONT = "Helvetica"
 PDF_TEMPLATES = {
     "premium_bw": "Premium B/W",
@@ -178,14 +177,7 @@ def _draw_resort_background(pdf: FPDF) -> bool:
 
 
 def _draw_cover_background(pdf: FPDF) -> bool:
-    if not COVER_BACKGROUND_PATH.exists():
-        return False
-
-    try:
-        pdf.image(str(COVER_BACKGROUND_PATH), x=0, y=0, w=pdf.w, h=pdf.h)
-        return True
-    except Exception:
-        return False
+    return _draw_resort_background(pdf)
 
 
 def normalize_template(template: str | None) -> str:
@@ -1762,11 +1754,12 @@ def build_pdf(draft: Any, output_path: Path = OUTPUT_PDF, template: str | None =
     _write_matrix_table(
         pdf,
         "3.4.2 Required Deliverables",
-        ["#", "Deliverable", "Format", "Deadline"],
+        ["#", "Deliverable", "Description / Acceptance Output", "Format", "Deadline"],
         [
             [
                 f"{index:02d}",
                 _as_dict(it).get("name", ""),
+                _as_dict(it).get("description", "") or "-",
                 _as_dict(it).get("format", "") or "-",
                 _as_dict(it).get("deadline_note", "") or "-",
             ]
@@ -1797,16 +1790,19 @@ def build_pdf(draft: Any, output_path: Path = OUTPUT_PDF, template: str | None =
     _write_bullet_subsection(pdf, "3.5.1 Project Phases", timeline.get("project_phases", []))
 
     _write_subsection(pdf, "3.5.2 Key Milestones")
-    for milestone in timeline.get("milestones", []):
-        m = _as_dict(milestone)
-        _write_key_value_table(
-            pdf,
+    _write_matrix_table(
+        pdf,
+        "",
+        ["Phase", "Milestone", "Target Date / Timing"],
+        [
             [
-                ("Phase", m.get("phase", "")),
-                ("Milestone", m.get("milestone", "")),
-                ("Target Date", m.get("target_date", "")),
-            ],
-        )
+                _as_dict(milestone).get("phase", "") or "-",
+                _as_dict(milestone).get("milestone", "") or "-",
+                _as_dict(milestone).get("target_date", "") or "-",
+            ]
+            for milestone in timeline.get("milestones", [])
+        ],
+    )
 
     pdf.add_page()
 

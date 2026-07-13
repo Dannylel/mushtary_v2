@@ -9,6 +9,9 @@ __pycache__/
 # Generated tender/evaluation artifacts
 /outputs/
 
+# Local durable AI audit trail (SQLite; never commit demo/user decision records)
+/data/
+
 # RAG index build artifacts (rebuild from agents/rag/sources via index_documents)
 agents/rag/corpora/tender_kb/vectors.npy
 agents/rag/corpora/tender_kb/chunks.jsonl

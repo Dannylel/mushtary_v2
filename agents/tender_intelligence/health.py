@@ -9,7 +9,7 @@ from typing import Any
 
 from agents.buyer_form import TenderBuyerForm
 from agents.guardrails import safe_parse
-from agents.llm_config import chat_with_usage
+from agents.llm_config import chat_json_with_usage
 from agents.prompts import load_prompt
 from agents.tender_drafting.schemas import TenderDraft
 
@@ -669,7 +669,7 @@ def _compact_form(form: TenderBuyerForm) -> dict:
     }
 
 
-def _shrink(value: Any, *, max_text: int = 900, max_items: int = 8) -> Any:
+def _shrink(value: Any, *, max_text: int = 1800, max_items: int = 15) -> Any:
     if isinstance(value, str):
         text = value.strip()
         return text if len(text) <= max_text else text[:max_text].rstrip() + "..."
@@ -767,7 +767,7 @@ def _run_llm_agent(
         from agents import activity
 
         activity.set_label(label)
-        raw, _usage = chat_with_usage(
+        raw, _usage, _repair_used = chat_json_with_usage(
             [
                 {"role": "system", "content": system_prompt},
                 {
@@ -780,7 +780,7 @@ def _run_llm_agent(
                 },
             ],
             temperature=0.0,
-            max_tokens=900,
+            max_tokens=1600,
         )
         parsed = _loads_json(raw)
         parsed["agent_name"] = fallback.agent_name
@@ -813,7 +813,7 @@ def _run_llm_aggregator(
         from agents import activity
 
         activity.set_label("Health aggregator")
-        raw, _usage = chat_with_usage(
+        raw, _usage, _repair_used = chat_json_with_usage(
             [
                 {"role": "system", "content": PROMPTS["aggregator"]},
                 {
@@ -826,7 +826,7 @@ def _run_llm_aggregator(
                 },
             ],
             temperature=0.0,
-            max_tokens=700,
+            max_tokens=1200,
         )
         parsed = _loads_json(raw)
         return safe_parse(parsed, TenderHealthAggregateOutput, fallback, "health_aggregator")

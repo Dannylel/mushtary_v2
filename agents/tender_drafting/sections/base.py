@@ -7,7 +7,7 @@ import json
 import logging
 import re
 
-from agents.llm_config import chat_text
+from agents.llm_config import chat_json_text
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ class BaseSectionAgent:
 
         activity.set_label(self.__class__.__name__.replace("SectionAgent", " section"))
         try:
-            return chat_text(
+            return chat_json_text(
                 [
                     {"role": "system", "content": system},
                     {"role": "user", "content": user},

@@ -13,10 +13,16 @@
     <div class="signin-panel">
       <div class="brand-mark">M</div>
       <h1>Mushtary Demo Sign In</h1>
-      <p>Choose a role. The demo signs you into one random account from the 30 buyer or 30 vendor profiles.</p>
+      <p>Choose a random account for a presentation, or select a fixed account for repeatable testing.</p>
       <div class="signin-actions">
         <button class="btn primary" id="signinBuyerBtn">Continue as Random Buyer</button>
         <button class="btn ghost" id="signinVendorBtn">Continue as Random Vendor</button>
+      </div>
+      <div class="signin-picker">
+        <label for="signinBuyerSelect">Fixed test buyer</label>
+        <div><select id="signinBuyerSelect"><option value="">Loading buyers…</option></select><button class="btn primary" id="signinSelectedBuyerBtn">Use buyer</button></div>
+        <label for="signinVendorSelect">Fixed test vendor</label>
+        <div><select id="signinVendorSelect"><option value="">Loading vendors…</option></select><button class="btn ghost" id="signinSelectedVendorBtn">Use vendor</button></div>
       </div>
       <div class="hint">No email, password, or real user data. This is only for testing buyer and vendor behavior.</div>
     </div>
@@ -50,6 +56,7 @@
           <b id="sessionName">Not signed in</b>
           <span id="sessionMeta">Choose buyer or vendor</span>
           <button class="mini-action" id="switchSessionBtn">Switch demo account</button>
+          <button class="mini-action" id="resetDemoBtn">Reset demo state</button>
         </div>
         <div class="rule-card">
           <div class="rule-title">Governance rule</div>
@@ -309,7 +316,8 @@
           </details>
           <details class="control-details">
             <summary>Optional AI-derived writing overrides</summary>
-            <div class="hint" style="margin-top:14px">Leave blank for Qwen to derive from the SoW and project details. Fill only when the buyer wants to lock exact wording or items.</div>
+            <div class="hint" style="margin-top:14px">Use Populate optional sections to derive editable content from the Scope of Work. Buyer-entered values are preserved.</div>
+            <div class="toolbar" style="margin-top:14px"><button id="populateOptionalBtn" type="button" class="btn ghost">Populate Deliverables & Optional Sections</button></div>
             <label class="field-label" style="margin-top:14px">Project objective</label>
             <textarea id="draftProjectObjective" class="input textarea compact-textarea" placeholder="Optional. Qwen can derive from the SoW."></textarea>
             <label class="field-label" style="margin-top:14px">Technical requirements</label>
@@ -317,9 +325,11 @@
             <label class="field-label" style="margin-top:14px">Methodology requirements</label>
             <textarea id="draftMethodologyRequirements" class="input textarea compact-textarea" placeholder="Optional. Qwen can derive from the SoW."></textarea>
             <label class="field-label" style="margin-top:14px">Deliverables</label>
-            <textarea id="draftDeliverables" class="input textarea compact-textarea" placeholder="Optional. Example: Deliverable name | Description | PDF"></textarea>
+            <div class="editable-table-wrap"><table class="editable-table" id="draftDeliverablesTable"><thead><tr><th>Deliverable</th><th>Description / acceptance output</th><th>Format</th><th></th></tr></thead><tbody></tbody></table></div>
+            <button type="button" class="table-add" data-add-row="draftDeliverablesTable">+ Add deliverable</button>
             <label class="field-label" style="margin-top:14px">Timeline milestones</label>
-            <textarea id="draftTimeline" class="input textarea compact-textarea" placeholder="Optional. Example: Kickoff | Within 5 business days from award"></textarea>
+            <div class="editable-table-wrap"><table class="editable-table" id="draftTimelineTable"><thead><tr><th>Milestone</th><th>Target date / timing</th><th></th></tr></thead><tbody></tbody></table></div>
+            <button type="button" class="table-add" data-add-row="draftTimelineTable">+ Add milestone</button>
             <label class="field-label" style="margin-top:14px">Roles and responsibilities</label>
             <textarea id="draftResponsibilities" class="input textarea compact-textarea" placeholder="Optional. Example: Buyer | Provide access; Review deliverables"></textarea>
             <label class="field-label" style="margin-top:14px">Evaluation criteria</label>

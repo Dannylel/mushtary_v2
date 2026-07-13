@@ -51,6 +51,19 @@ EXACT shape:
 }
 
 ## Quality bar
+- Each scope category description must define its boundary and intended output. Each requirement
+  must contain a concrete vendor action, output/evidence, and buyer-verifiable completion or
+  acceptance condition. Avoid requirements that only say "provide", "support", or "ensure".
+- Write every requirement string in this pattern: "The vendor shall [specific action and
+  minimum content]. Evidence/acceptance: [document, test result, platform record, inspection,
+  approval, or other buyer-verifiable proof]." A bare activity without its evidence/acceptance
+  test is incomplete.
+- KPIs may use buyer-provided targets. If no numeric target is supplied, define the measurement,
+  evidence source, and review/acceptance event without inventing a percentage or service level.
+- Include planning, quality assurance, reporting, risk/issue management, knowledge transfer,
+  documentation, and handover requirements where they are genuinely implied by the SOW.
+- Make boundaries explicit through included activities, dependencies, buyer inputs, vendor
+  inputs, and exclusions that require buyer confirmation.
 - 3-6 scope categories and 3-5 execution phases, each appropriate to the buyer's category.
 - 3-5 business goals, 3-5 expected outcomes, 2-4 KPIs.
 - Every list item is one complete, specific sentence — no placeholders like "TBD" or "etc."

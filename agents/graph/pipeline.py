@@ -41,7 +41,7 @@ from agents.tender_drafting.sections.scope import ScopeSectionAgent
 from .state import TenderState
 
 PROMPT_NAME = "tender_draft_v2"
-PROMPT_VERSION = "3.2.0"
+PROMPT_VERSION = "3.3.0"
 
 
 # ── Nodes ──────────────────────────────────────────────────────────────────────

@@ -51,6 +51,13 @@ Draft the Deliverables, Timeline, and Team Requirements for this tender.
 
 CATEGORY: {form.category} / {form.subcategory}
 PROJECT OBJECTIVE: {form.project_objective}
+SCOPE OF WORK:
+{form.scope_of_work}
+
+TECHNICAL / METHODOLOGY REQUIREMENTS:
+{form.technical_requirements or "Derive operational requirements from the SOW"}
+{form.methodology_requirements or "Derive a suitable delivery method from the SOW"}
+
 CONTRACT DURATION: {form.contract_duration or "Not specified"}
 SAUDIZATION REQUIRED: {form.saudization_required}
 MINIMUM YEARS EXPERIENCE: {form.minimum_years_experience or "Not specified"}
@@ -175,7 +182,7 @@ def _execution_fallback(form: TenderBuyerForm) -> ExecutionSections:
 
 class ExecutionSectionAgent(BaseSectionAgent):
     def run(self, form: TenderBuyerForm) -> ExecutionSections:
-        data = self._generate(SYSTEM_PROMPT, _build_user_message(form), max_tokens=2800)
+        data = self._generate(SYSTEM_PROMPT, _build_user_message(form), max_tokens=4000)
         if not data:
             return _execution_fallback(form)
 

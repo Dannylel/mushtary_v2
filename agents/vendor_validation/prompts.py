@@ -6,7 +6,7 @@ The system prompt text lives in `agents/prompts/vendor_validation_system.md`
 from agents.prompts import load_prompt
 
 PROMPT_NAME = "vendor_validation_v1"
-PROMPT_VERSION = "1.1.0"
+PROMPT_VERSION = "1.2.0"
 
 SYSTEM_PROMPT = load_prompt("vendor_validation_system")
 

@@ -24,13 +24,13 @@ from agents.buyer_form import (
 )
 from agents.categories import ALL_CATEGORIES, CATEGORIES
 from agents.guardrails import safe_parse
-from agents.llm_config import chat_text
+from agents.llm_config import chat_json_text
 from agents.prompts import load_prompt
 
 logger = logging.getLogger(__name__)
 
 PROMPT_NAME = "form_generator_v1"
-PROMPT_VERSION = "1.2.0"
+PROMPT_VERSION = "1.3.0"
 
 SYSTEM_PROMPT = load_prompt("form_generator_system")
 
@@ -136,13 +136,13 @@ class FormGeneratorAgent(BaseAgent):
 
         activity.set_label("Form generator")
 
-        raw = chat_text(
+        raw = chat_json_text(
             [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": _build_user_message(seed)},
             ],
-            temperature=0.8,
-            max_tokens=3000,
+            temperature=0.45,
+            max_tokens=4200,
         )
         form = self._parse(raw, seed, trace_id)
         logger.info("FormGeneratorAgent complete", extra={"trace_id": trace_id, "title": form.tender_title})

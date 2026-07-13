@@ -21,7 +21,9 @@ Score from 0 to 100:
 
 Think carefully, but do not output private scratchpad or chain-of-thought. Instead, provide a concise visible reasoning_summary with the key reasons behind the score.
 
-Keep the output concise: maximum 3 reasoning_summary bullets, maximum 5 signals, and maximum 3 findings.
+Return 3-5 reasoning_summary bullets, up to 8 signals, and up to 6 findings. Every finding must
+identify the exact commercial field/clause, explain its pricing or invoicing consequence, cite
+the supplied evidence, and give contract-ready corrective wording or a specific buyer decision.
 
 Return valid JSON only:
 {

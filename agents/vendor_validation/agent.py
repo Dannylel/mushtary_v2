@@ -17,7 +17,7 @@ from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
 from agents.base import AIArtifact, BaseAgent
 from agents.guardrails import safe_parse
-from agents.llm_config import make_chat_model
+from agents.llm_config import make_chat_model, repair_json_text
 
 from .prompts import PROMPT_NAME, PROMPT_VERSION, SYSTEM_PROMPT, build_user_message
 from .schemas import (
@@ -126,7 +126,7 @@ class VendorValidationAgent(BaseAgent):
         # stream_activity=False: streamed tool-call deltas are unreliable on local servers;
         # the activity console gets tool-call info events from the loop below instead.
         self._model = make_chat_model(
-            temperature=0.1, max_tokens=1024, stream_activity=False
+            temperature=0.1, max_tokens=1600, stream_activity=False
         ).bind_tools(TOOLS)
 
     def run(self, payload: VendorValidationInput) -> AIArtifact:
@@ -189,6 +189,9 @@ class VendorValidationAgent(BaseAgent):
             logger.warning("Tool-use loop hit max rounds — flagging for review", extra={"trace_id": trace_id})
             final_text = None
 
+        # Tool calls must not be repeated just because the final answer has malformed
+        # JSON. Repair the final serialization once, preserving the completed tool evidence.
+        final_text = repair_json_text(final_text, SYSTEM_PROMPT, max_tokens=1600)
         validated = self._parse_output(final_text, trace_id)
 
         artifact = self.build_artifact(
