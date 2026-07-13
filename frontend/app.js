@@ -322,7 +322,7 @@ function show(view) {
   $$(".view").forEach(v => v.classList.toggle("active", v.id === `view-${view}`));
   window.scrollTo({ top: 0 });
   if (view === "vendor-feed") loadVendorFeed();
-  if (view === "draft") loadSavedTenders();
+  if (view === "drafted-tenders") loadSavedTenders();
   if (view === "reputation") { loadReputationHub(); loadTenderValidationPicker(); }
   if (view === "buyer-proposals") loadBuyerProposalComparison();
 }
@@ -356,7 +356,7 @@ function setSignedInBuyerFields() {
 
 function updateRoleNavigation() {
   const role = sessionRole();
-  const buyerOnly = ["draft", "extract", "evaluate", "buyer-proposals"];
+  const buyerOnly = ["draft", "drafted-tenders", "extract", "evaluate", "buyer-proposals"];
   const vendorOnly = ["vendor-feed"];
   $$("[data-role-view]").forEach(el => {
     el.style.display = !role || el.dataset.roleView === role ? "" : "none";

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mushtary — AI Procurement Console</title>
-  <link rel="stylesheet" href="/styles.css?v=20260713-tablefix" />
+  <link rel="stylesheet" href="/styles.css?v=20260713-drafted-tenders" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 </head>
@@ -41,6 +41,7 @@
       <nav class="nav">
         <button class="nav-item active" data-view="overview"><span class="ico">◆</span> Overview</button>
         <button class="nav-item" data-view="draft"><span class="ico">✎</span> Draft Tender</button>
+        <button class="nav-item" data-view="drafted-tenders" data-role-view="buyer"><span class="ico">DT</span> Drafted Tenders</button>
         <button class="nav-item" data-view="extract"><span class="ico">⬆</span> Extract from PDF</button>
         <button class="nav-item" data-view="validate"><span class="ico">✓</span> Vendor Validation</button>
         <button class="nav-item" data-view="evaluate"><span class="ico">★</span> Evaluate &amp; Rank</button>
@@ -84,6 +85,12 @@
             <div class="feat-ico">✎</div>
             <h3>Draft Tender</h3>
             <p>Turn a project Scope of Work plus fixed tender facts into a full RFP — four AI sections drafted in parallel and grounded on a clause library + Saudi procurement law.</p>
+            <span class="link">Open →</span>
+          </div>
+          <div class="card feature" data-go="drafted-tenders" data-role-view="buyer">
+            <div class="feat-ico">DT</div>
+            <h3>Drafted Tenders</h3>
+            <p>View every tender created by this buyer, including its publication status, vendor take-up, and submitted proposals.</p>
             <span class="link">Open →</span>
           </div>
           <div class="card feature" data-go="extract">
@@ -361,6 +368,14 @@
         </div>
         <div id="sowReviewResult"></div>
         <div id="draftResult"></div>
+      </section>
+
+      <!-- DRAFTED TENDERS -->
+      <section class="view" id="view-drafted-tenders" data-role-view="buyer">
+        <header class="page-head">
+          <h1>Drafted Tenders</h1>
+          <p>All tenders created by the signed-in buyer, from private draft through vendor publication and proposal submission.</p>
+        </header>
         <div id="savedTenders"></div>
       </section>
 
@@ -548,6 +563,6 @@
       row.querySelector("input")?.focus();
     };
   </script>
-  <script src="/app.js?v=20260713-tablefix"></script>
+  <script src="/app.js?v=20260713-drafted-tenders"></script>
 </body>
 </html>
