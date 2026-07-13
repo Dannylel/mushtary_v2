@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -36,6 +36,16 @@ OUTPUTS.mkdir(exist_ok=True)
 UPLOADS.mkdir(exist_ok=True)
 
 app = FastAPI(title="Mushtary Demo API", version="1.0.0")
+
+
+@app.middleware("http")
+async def utf8_responses(request: Request, call_next):
+    """Make browser/API text encoding explicit for Arabic and English demo content."""
+    response = await call_next(request)
+    content_type = response.headers.get("content-type", "")
+    if (content_type.startswith("text/") or "application/json" in content_type) and "charset=" not in content_type.lower():
+        response.headers["content-type"] = f"{content_type}; charset=utf-8"
+    return response
 
 # ── Activity feed: bridge agents' log lines into the live console ───────────────
 from agents import activity  # noqa: E402  (after dotenv so config is loaded)
@@ -426,6 +436,9 @@ def _job_full_draft(
         raise RuntimeError("Pipeline returned no artifact")
 
     artifact["actor_id"] = buyer_id or artifact.get("actor_id")
+    consistency = state.get("consistency_report") if isinstance(state, dict) else None
+    if consistency:
+        artifact.setdefault("output", {})["consistency_report"] = consistency
     _save_artifact(artifact)
 
     fid = uuid.uuid4().hex[:12]
@@ -913,6 +926,11 @@ def approve_artifact(artifact_id: str, req: ArtifactApprovalReq):
             with _LOCK:
                 _PENDING_TENDERS[artifact_id] = pending
             raise HTTPException(403, "Only the draft's Buyer-Admin can publish it")
+        consistency = (pending.get("artifact", {}).get("output", {}) or {}).get("consistency_report", {})
+        if consistency.get("status") == "BLOCKED":
+            with _LOCK:
+                _PENDING_TENDERS[artifact_id] = pending
+            raise HTTPException(409, "Publication is blocked until high-severity consistency findings are resolved")
         published_tender = _publish_tender_artifact(
             pending["artifact"], pending["file_id"], pending["template"], req.buyer_id,
         )

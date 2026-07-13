@@ -193,13 +193,28 @@ class VendorValidationAgent(BaseAgent):
         # JSON. Repair the final serialization once, preserving the completed tool evidence.
         final_text = repair_json_text(final_text, SYSTEM_PROMPT, max_tokens=1600)
         validated = self._parse_output(final_text, trace_id)
+        from agents.document_requirements import assess_document_requirements
+        document_assessment = assess_document_requirements(
+            categories=payload.selected_categories, document_types=doc_types,
+        )
+        # No document agent is allowed to turn a missing or unverified record into approval.
+        if document_assessment["missing_required"] and validated.outcome == "AUTO_VALIDATED":
+            validated = validated.model_copy(update={
+                "outcome": "NEEDS_CORRECTION",
+                "missing_documents": sorted(set(validated.missing_documents + document_assessment["missing_required"])),
+                "flags": sorted(set(validated.flags + ["document_requirements_incomplete"])),
+            })
 
         artifact = self.build_artifact(
             trace_id=trace_id,
             prompt_name=PROMPT_NAME,
             prompt_version=PROMPT_VERSION,
             input_snapshot=input_snapshot,
-            output=validated.model_dump(mode="json"),
+            output={
+                **validated.model_dump(mode="json"),
+                "document_assessment": document_assessment,
+                "verification_mode": "DEMO_ADAPTERS_ONLY - not an official registry or document verification result",
+            },
             usage={"input_tokens": total_input_tokens, "output_tokens": total_output_tokens},
             vendor_id=payload.vendor_id,
         )

@@ -858,8 +858,17 @@ function renderDraft(result) {
   const ev = o.evaluation_criteria || {};
   const pay = o.payment_terms || {};
   const ti = o.tender_intelligence || {};
+  const consistency = o.consistency_report || {};
 
   const sections = [];
+
+  if (consistency.status) {
+    const issues = (consistency.findings || []).map(item => `<li><b>${esc(item.area || "Consistency")}</b> — ${esc(item.issue || "Review required")}</li>`).join("");
+    sections.push(block("✓", "Consistency & Publication Gate",
+      `<p><b>${esc(consistency.status)}</b> · ${esc(consistency.analysis_mode || "deterministic")}</p>` +
+      (consistency.repairs_applied?.length ? `<p class="muted2">Applied ${esc(consistency.repairs_applied.length)} buyer-fact reconciliation(s).</p>` : "") +
+      (issues ? `<ul class="ul">${issues}</ul>` : "<p>No material conflicts found.</p>")));
+  }
 
   if (ti.tender_quality_score != null) {
     lastHealthPromptPatch = buildHealthPromptPatch(form, ti);

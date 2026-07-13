@@ -32,6 +32,7 @@ from agents.form_generator.agent import FormGeneratorAgent
 from agents.llm_config import get_model
 from agents.sow_extractor.agent import SoWExtractorAgent
 from agents.tender_intelligence import assess_tender_health
+from agents.tender_consistency import reconcile_tender
 from agents.tender_drafting.schemas import assemble_tender_draft
 from agents.tender_drafting.sections.context import ContextSectionAgent
 from agents.tender_drafting.sections.execution import ExecutionSectionAgent
@@ -115,6 +116,13 @@ def node_tender_intelligence(state: TenderState) -> dict:
     return {"tender_intelligence": health, "artifact": artifact}
 
 
+def node_consistency(state: TenderState) -> dict:
+    draft, report = reconcile_tender(state["draft"], state["form"])
+    artifact = dict(state["artifact"])
+    artifact["output"] = draft.model_dump(mode="json")
+    return {"draft": draft, "consistency_report": report, "artifact": artifact}
+
+
 # ── Graph ──────────────────────────────────────────────────────────────────────
 
 def build_tender_graph():
@@ -128,13 +136,15 @@ def build_tender_graph():
     g.add_node("execution", node_execution)
     g.add_node("legal_eval", node_legal_eval)
     g.add_node("assemble", node_assemble)
+    g.add_node("consistency", node_consistency)
     g.add_node("tender_intelligence", node_tender_intelligence)
 
     g.add_edge(START, "form_source")
     for section in ("context", "scope", "execution", "legal_eval"):
         g.add_edge("form_source", section)   # fan-out (parallel)
         g.add_edge(section, "assemble")      # fan-in (assemble waits for all four)
-    g.add_edge("assemble", "tender_intelligence")
+    g.add_edge("assemble", "consistency")
+    g.add_edge("consistency", "tender_intelligence")
     g.add_edge("tender_intelligence", END)
 
     return g.compile()

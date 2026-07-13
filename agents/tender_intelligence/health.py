@@ -895,6 +895,7 @@ def assess_tender_health(draft: TenderDraft, form: TenderBuyerForm) -> TenderHea
         vendor_participation_score=participation_agent.score,
         risk_of_vendor_questions=aggregate.risk_of_vendor_questions,
         estimated_vendor_participation=aggregate.estimated_vendor_participation,
+        analysis_mode=("LLM_PRIMARY_WITH_DETERMINISTIC_FALLBACK" if _llm_enabled() else "DETERMINISTIC_FALLBACK"),
         publish_readiness=aggregate.publish_readiness,
         generated_at=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         health_agents=agents,

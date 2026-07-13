@@ -80,6 +80,12 @@ The extractor normalizes imperfect local-model output before validation. In part
 
 Guardrails validate structured outputs. A fallback protects the application from malformed model JSON, but a fallback result should be reviewed before publication; it is not proof that a draft is ready for a client-facing tender.
 
+### Consistency and publication gate
+
+Before Tender Health review, the Tender Consistency and Compliance Agent reconciles hard buyer facts and reviews semantic conflicts. Buyer-entered deliverables and milestone dates replace conflicting generated values. The system never invents a Saudization percentage when the buyer supplied only a policy flag. A high-severity consistency finding blocks Buyer-Admin publication until it is resolved.
+
+The agent handles semantic judgment. Deterministic controls handle fixed facts, required rows, publication state, and authorization.
+
 ## Tender Health Committee
 
 Tender Health is an internal quality review shown in the web UI. It considers scope clarity, commercial clarity, compliance readiness, vendor participation risk, and aggregate readiness. It can recommend improvements, but it does not independently publish, reject, or award a tender.
@@ -115,6 +121,8 @@ The 30 buyer and 30 vendor profiles are deterministic demo data. They illustrate
 ## Vendor validation
 
 The validation agent follows the intended sequence: CR lookup, duplicate detection, category alignment, and document-completeness check. Its current integrations in `agents/vendor_validation/stubs.py` are demo adapters. They must be replaced with authenticated registry/database/document-validation services before production use.
+
+The Document Applicability Agent now identifies required versus conditional document types from selected categories and uploaded metadata. It is advisory and cannot claim a document is authentic, valid, or current; those checks require issuer, expiry, legal-name, and registry integrations.
 
 Do not interpret a demo validation outcome as official legal or registry verification.
 

@@ -59,6 +59,7 @@ class TenderHealthScore(BaseModel):
     risk_of_vendor_questions: str
     estimated_vendor_participation: str
     document_status: str = "DRAFT - Pending Buyer Approval"
+    analysis_mode: str = "LLM_PRIMARY_WITH_DETERMINISTIC_FALLBACK"
     publish_readiness: str
     generated_at: str
     health_agents: list[TenderHealthAgentResult] = Field(default_factory=list)
