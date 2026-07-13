@@ -118,6 +118,8 @@ Shortlisting combines tender requirement match, technical/proposal quality, comm
 
 The 30 buyer and 30 vendor profiles are deterministic demo data. They illustrate the scoring model but are not live company, rating, payment, dispute, or verification records.
 
+Each demo vendor includes document status/expiry metadata, verification evidence, delivery history, commercial capacity, capability evidence, and rating/dispute evidence. Each demo buyer includes payment, evaluation-fairness, governance, and reputation evidence. These are intentionally synthetic but give the VRI/BRI, selection, document, and committee agents complete structured evidence to reason over.
+
 ## Vendor validation
 
 The validation agent follows the intended sequence: CR lookup, duplicate detection, category alignment, and document-completeness check. Its current integrations in `agents/vendor_validation/stubs.py` are demo adapters. They must be replaced with authenticated registry/database/document-validation services before production use.
@@ -143,7 +145,9 @@ Do not interpret a demo validation outcome as official legal or registry verific
 
 `agents/artifact_store.py` uses SQLite to retain AI artifacts, their input snapshots, structured output, prompt metadata, and buyer approvals. This is the persistent audit trail in the MVP.
 
-The marketplace state is intentionally separate and volatile. Restarting the API clears active jobs, pending drafts, published tenders, and submitted demo proposals but retains persisted AI artifacts.
+Jobs and submitted demo proposals are session-oriented. Restarting the API clears active jobs and in-memory proposal state, while saved tender drafts, published tenders, AI artifacts, and approval records remain persisted locally.
+
+Tender drafts and published tenders are now stored in the same local SQLite database and are restored after an API restart. A Buyer-Admin can see saved tender history in the Draft Tender screen. Active jobs and demo proposals remain session-oriented; drafts remain private until Buyer-Admin publication.
 
 ## API overview
 

@@ -314,6 +314,7 @@ function show(view) {
   $$(".view").forEach(v => v.classList.toggle("active", v.id === `view-${view}`));
   window.scrollTo({ top: 0 });
   if (view === "vendor-feed") loadVendorFeed();
+  if (view === "draft") loadSavedTenders();
   if (view === "buyer-proposals") loadBuyerProposalComparison();
 }
 $$(".nav-item").forEach(b => b.addEventListener("click", () => show(b.dataset.view)));
@@ -1102,6 +1103,27 @@ async function approveTenderDraft(artifactId) {
     return;
   }
   $("#draftResult").insertAdjacentHTML("afterbegin", `<div class="result ok-result"><b>Tender approved and published.</b> It is now visible in the Vendor Tender Feed.</div>`);
+  loadSavedTenders();
+}
+
+async function loadSavedTenders() {
+  const box = $("#savedTenders");
+  if (!box || sessionRole() !== "buyer") return;
+  try {
+    const response = await fetch(`/api/tenders/saved?buyer_id=${encodeURIComponent(sessionAccountId())}`);
+    const data = await response.json();
+    const rows = (data.tenders || []).map(t => `<tr>
+      <td><b>${esc(t.title)}</b><span>${esc(t.reference || "")}</span></td>
+      <td>${esc(t.publication_status)}</td>
+      <td>${esc(t.created_at || "")}</td>
+      <td>${t.file_id ? `<a class="btn ghost" href="/api/download/${esc(t.file_id)}/pdf" target="_blank">Open PDF</a>` : ""}</td>
+    </tr>`).join("");
+    box.innerHTML = `<div class="section-block"><div class="sb-head"><span class="num">S</span>Saved Tender History</div>
+      <div class="sb-body"><p class="hint">Drafts and published tenders are stored locally and remain after restarting the demo.</p>
+      ${rows ? `<div class="rep-table-wrap"><table class="rep-table"><thead><tr><th>Tender</th><th>Status</th><th>Created</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : "<p class='empty'>No saved tenders for this buyer yet.</p>"}</div></div>`;
+  } catch (error) {
+    box.innerHTML = errorHTML("Could not load saved tender history.");
+  }
 }
 
 async function loadDraftVendorRecommendations(form) {

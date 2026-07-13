@@ -250,6 +250,17 @@ def _base_vendor(index: int) -> dict[str, Any]:
         "dispute_rate": round(max(0.4, 8.5 - delivery / 14 + (index % 3) * 0.6), 1),
         "rating": rating,
         "certifications": certifications,
+        "document_profile": {
+            "commercial_registration": {"status": "verified_demo", "expires_on": f"202{7 + index % 2}-12-31"},
+            "vat_certificate": {"status": "verified_demo", "expires_on": f"202{7 + index % 2}-09-30"},
+            "national_address": {"status": "verified_demo", "expires_on": f"202{7 + index % 2}-06-30"},
+            "saudization_certificate": {"status": "review_due" if index % 9 == 8 else "verified_demo", "expires_on": f"202{7 + index % 2}-03-31"},
+        },
+        "verification_evidence": [f"Demo CR record {vendor_id}", *[f"Demo institutional verification: {name}" for name in _institutional_verifications(index, institutional)]],
+        "delivery_history": {"completed_projects": completed_contracts, "on_time_percent": _round(delivery - 2 + (index % 4)), "quality_acceptance_percent": _round(delivery + 1), "open_corrective_actions": index % 3},
+        "commercial_profile": {"average_contract_value_sar": 180_000 + (index % 10) * 145_000, "typical_bid_sar": 720_000 + (index % 12) * 95_000, "financial_capacity_band": ["Standard", "Established", "Strategic"][index % 3]},
+        "capability_evidence": {"key_roles": ["Project Manager", "Quality Lead", "Category Specialist"], "references_available": 2 + (index % 5), "service_coverage": ["Riyadh", "Jeddah", "Dammam"] if index % 2 == 0 else ["Riyadh", "Regional"]},
+        "reputation_evidence": {"rating_count": 5 + index, "recent_rating_trend": ["improving", "stable", "watch"][index % 3], "dispute_summary": "No material unresolved demo dispute" if index % 4 else "One resolved demo dispute"},
         "institutional_verifications": _institutional_verifications(index, institutional),
         "vri": {
             "overall": overall,
@@ -337,6 +348,10 @@ def _base_buyer(index: int) -> dict[str, Any]:
         "average_payment_days": max(12, int(48 - payment / 3)),
         "dispute_rate": round(max(0.2, 7.8 - dispute_behavior / 15 + (index % 2) * 0.7), 1),
         "rating": rating,
+        "evaluation_evidence": {"completed_evaluations": completed_tenders, "criteria_published_percent": _round(fairness), "average_clarification_response_hours": 18 + (index % 18), "conflict_checks_completed": completed_tenders},
+        "payment_evidence": {"invoices_paid": completed_tenders * 4, "on_time_payment_percent": payment, "average_payment_days": max(12, int(48 - payment / 3)), "overdue_invoices": index % 3},
+        "governance_evidence": {"buyer_users": 2 + index % 5, "approval_controls": ["Buyer-Admin approval", "Conflict declaration", "Audit artifact retention"], "complaints_resolved": index % 4},
+        "reputation_evidence": {"rating_count": 4 + index, "recent_rating_trend": ["improving", "stable", "watch"][index % 3], "dispute_summary": "No material unresolved demo dispute" if index % 4 else "One resolved demo dispute"},
         "buyer_score": bri,
         "bri": {
             "overall": bri,

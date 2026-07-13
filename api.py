@@ -190,6 +190,16 @@ def _published_tender_view(tender: dict[str, Any], include_artifact: bool = Fals
     return view
 
 
+def _save_marketplace_tender(tender_id: str, status: str, buyer_id: str | None, payload: dict[str, Any]) -> None:
+    from agents.marketplace_store import save_tender
+    save_tender(tender_id, status, buyer_id, payload)
+
+
+def _load_marketplace_tenders(status: str | None = None, buyer_id: str | None = None) -> list[dict[str, Any]]:
+    from agents.marketplace_store import list_tenders
+    return list_tenders(status=status, buyer_id=buyer_id)
+
+
 def _publish_tender_artifact(
     artifact: dict[str, Any],
     file_id: str,
@@ -233,6 +243,7 @@ def _publish_tender_artifact(
     }
     with _LOCK:
         _TENDERS[tender_id] = tender
+    _save_marketplace_tender(tender_id, "published", buyer["account_id"], tender)
     return _published_tender_view(tender)
 
 
@@ -453,9 +464,11 @@ def _job_full_draft(
     build_pdf(artifact, default_pdf_path, template=template)
     # Drafts remain private until the Buyer-Admin explicitly approves publication.
     with _LOCK:
-        _PENDING_TENDERS[artifact["id"]] = {
+        pending = {
             "artifact": artifact, "file_id": fid, "template": template, "buyer_id": buyer_id,
         }
+        _PENDING_TENDERS[artifact["id"]] = pending
+    _save_marketplace_tender(artifact["id"], "draft", buyer_id, pending)
     return {
         "artifact": artifact, "file_id": fid, "template": template,
         "publication_status": "PENDING_BUYER_APPROVAL",
@@ -921,6 +934,11 @@ def approve_artifact(artifact_id: str, req: ArtifactApprovalReq):
     published_tender = None
     with _LOCK:
         pending = _PENDING_TENDERS.pop(artifact_id, None)
+    if not pending:
+        from agents.marketplace_store import get_tender
+        restored = get_tender(artifact_id)
+        if restored and restored.get("status") == "draft":
+            pending = restored
     if pending:
         if pending.get("buyer_id") and pending["buyer_id"] != req.buyer_id:
             with _LOCK:
@@ -934,6 +952,7 @@ def approve_artifact(artifact_id: str, req: ArtifactApprovalReq):
         published_tender = _publish_tender_artifact(
             pending["artifact"], pending["file_id"], pending["template"], req.buyer_id,
         )
+        _save_marketplace_tender(artifact_id, "approved_draft", req.buyer_id, pending)
     return {
         "artifact": artifact,
         "published_tender": published_tender,
@@ -1043,13 +1062,17 @@ def reset_demo_state():
     return {
         "cleared": counts,
         "audit_trail": "preserved",
-        "message": "Demo state reset. Persisted AI artifacts and approval records were retained.",
+        "message": "Demo state reset. Saved drafts, published tenders, AI artifacts, and approval records were retained.",
     }
 
 
 @app.get("/api/tenders/feed")
 def tender_feed(vendor_id: str | None = None):
-    tenders = [_published_tender_view(t) for t in _TENDERS.values()]
+    persisted = _load_marketplace_tenders(status="published")
+    with _LOCK:
+        for tender in persisted:
+            _TENDERS[tender["id"]] = tender
+    tenders = [_published_tender_view(t) for t in persisted]
     tenders.sort(key=lambda item: item["created_at"], reverse=True)
     if vendor_id:
         for tender in tenders:
@@ -1067,9 +1090,31 @@ def tender_feed(vendor_id: str | None = None):
     return {"tenders": tenders}
 
 
+@app.get("/api/tenders/saved")
+def saved_tenders(buyer_id: str | None = None):
+    """Buyer-visible saved drafts and published tender history, durable across restarts."""
+    records = _load_marketplace_tenders(buyer_id=buyer_id)
+    items = []
+    for record in records:
+        artifact = record.get("artifact") or {}
+        output = artifact.get("output") or {}
+        items.append({
+            "id": record.get("id"), "status": record.get("status"), "created_at": record.get("created_at"),
+            "title": record.get("title") or output.get("metadata", {}).get("title") or artifact.get("input_snapshot", {}).get("tender_title") or "Tender Draft",
+            "reference": record.get("reference") or output.get("metadata", {}).get("tender_id") or artifact.get("input_snapshot", {}).get("tender_id"),
+            "file_id": record.get("file_id"),
+            "artifact_id": artifact.get("id") or record.get("id"),
+            "publication_status": "Published to vendors" if record.get("status") == "published" else "Private draft - pending Buyer-Admin approval",
+        })
+    return {"tenders": items}
+
+
 @app.get("/api/tenders/{tender_id}")
 def tender_detail(tender_id: str):
     tender = _TENDERS.get(tender_id)
+    if not tender:
+        from agents.marketplace_store import get_tender
+        tender = get_tender(tender_id)
     if not tender:
         raise HTTPException(404, "tender not found")
     return {"tender": _published_tender_view(tender, include_artifact=True)}
