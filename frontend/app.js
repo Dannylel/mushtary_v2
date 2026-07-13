@@ -56,8 +56,8 @@ function parseDelimitedRows(id, columns) {
   }).filter(row => Object.values(row).some(Boolean));
 }
 
-function parseResponsibilities(id) {
-  return parseDelimitedRows(id, ["party", "responsibilities"]).map(row => ({
+function responsibilityRows() {
+  return tableRows("draftResponsibilitiesTable", ["party", "responsibilities"]).map(row => ({
     party: row.party,
     responsibilities: row.responsibilities.split(";").map(x => x.trim()).filter(Boolean),
   })).filter(row => row.party && row.responsibilities.length);
@@ -133,7 +133,7 @@ function collectDraftOverrides() {
     methodology_requirements: value("#draftMethodologyRequirements") || undefined,
     deliverables: tableRows("draftDeliverablesTable", ["name", "description", "format"]),
     timeline: tableRows("draftTimelineTable", ["milestone", "date"]),
-    roles_and_responsibilities: parseResponsibilities("#draftResponsibilities"),
+    roles_and_responsibilities: responsibilityRows(),
     issue_date: value("#draftIssueDate") || undefined,
     clarification_deadline: value("#draftClarificationDate") || undefined,
     submission_deadline: value("#draftSubmissionDate") || undefined,
@@ -1197,7 +1197,15 @@ $("#reviewSowBtn").addEventListener("click", () => {
   });
 });
 
-$$('[data-add-row]').forEach(button => button.addEventListener("click", () => addEditableRow(button.dataset.addRow)));
+// Event delegation keeps the add-row controls reliable even when the buyer form
+// is rerendered or optional fields are repopulated.
+document.addEventListener("click", event => {
+  const button = event.target.closest("[data-add-row]");
+  if (!button) return;
+  addEditableRow(button.dataset.addRow);
+  const table = document.getElementById(button.dataset.addRow);
+  $("tbody tr:last-child input", table)?.focus();
+});
 
 function applyPopulatedOptionalSections(form) {
   const setIfBlank = (selector, next) => {
@@ -1207,7 +1215,6 @@ function applyPopulatedOptionalSections(form) {
   setIfBlank("#draftProjectObjective", form.project_objective);
   setIfBlank("#draftTechnicalRequirements", form.technical_requirements);
   setIfBlank("#draftMethodologyRequirements", form.methodology_requirements);
-  setIfBlank("#draftResponsibilities", (form.roles_and_responsibilities || []).map(r => `${r.party} | ${(r.responsibilities || []).join("; ")}`).join("\n"));
   setIfBlank("#draftEvaluationCriteria", (form.evaluation_criteria || []).map(c => `${c.name} | ${c.weight} | ${c.description}`).join("\n"));
   setIfBlank("#draftTechnicalEvalParams", (form.technical_evaluation_parameters || []).join("\n"));
   setIfBlank("#draftFinancialEvalParams", (form.financial_evaluation_parameters || []).join("\n"));
@@ -1216,6 +1223,12 @@ function applyPopulatedOptionalSections(form) {
   }
   if (!tableRows("draftTimelineTable", ["milestone", "date"]).length) {
     replaceEditableRows("draftTimelineTable", form.timeline, ["milestone", "date"]);
+  }
+  if (!responsibilityRows().length) {
+    replaceEditableRows("draftResponsibilitiesTable", (form.roles_and_responsibilities || []).map(row => ({
+      party: row.party || "",
+      responsibilities: Array.isArray(row.responsibilities) ? row.responsibilities.join("; ") : (row.responsibilities || ""),
+    })), ["party", "responsibilities"]);
   }
 }
 
