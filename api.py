@@ -73,7 +73,7 @@ if not any(isinstance(handler, _ActivityLogHandler) for handler in _agents_logge
 
 
 # ── Tiny in-memory job manager ──────────────────────────────────────────────────
-# A job is one agent/pipeline run. Status flows PENDING -> RUNNING -> SUCCESS|FAILURE.
+# A job is one agent/pipeline run. Status flows PENDING -> RUNNING -> SUCCESS|FAILURE|CANCELLED.
 class Job(BaseModel):
     id: str
     kind: str
@@ -109,20 +109,28 @@ def _new_job(kind: str) -> Job:
 
 
 def _run_async(job: Job, fn, *args, **kwargs) -> None:
-    """Execute fn(*args) in a daemon thread, recording result/error on the job."""
+    """Execute fn(*args) in a daemon thread, respecting cancellation at safe boundaries."""
     def _target():
         with _LOCK:
+            if _JOBS[job.id].status == "CANCELLED":
+                return
             _JOBS[job.id].status = "RUNNING"
         activity.publish("info", f"Job started: {job.kind}", label="job")
         try:
             result = fn(*args, **kwargs)
             with _LOCK:
+                if _JOBS[job.id].status == "CANCELLED":
+                    activity.publish("info", f"Job cancelled: {job.kind}", label="job")
+                    return
                 _JOBS[job.id].status = "SUCCESS"
                 _JOBS[job.id].result = result
                 _JOBS[job.id].finished_at = datetime.now(timezone.utc).isoformat()
             activity.publish("info", f"Job finished: {job.kind}", label="job")
         except Exception as e:  # surface the failure to the UI rather than dying silently
             with _LOCK:
+                if _JOBS[job.id].status == "CANCELLED":
+                    activity.publish("info", f"Job cancelled: {job.kind}", label="job")
+                    return
                 _JOBS[job.id].status = "FAILURE"
                 _JOBS[job.id].error = f"{type(e).__name__}: {e}"
                 _JOBS[job.id].finished_at = datetime.now(timezone.utc).isoformat()
@@ -926,6 +934,39 @@ def get_job(job_id: str):
     if not job:
         raise HTTPException(404, "job not found")
     return job.model_dump()
+
+
+@app.post("/api/jobs/{job_id}/cancel")
+def cancel_job(job_id: str):
+    """Cancel a queued/running demo job and discard any late result safely."""
+    with _LOCK:
+        job = _JOBS.get(job_id)
+        if not job:
+            raise HTTPException(404, "job not found")
+        if job.status in {"SUCCESS", "FAILURE", "CANCELLED"}:
+            return job.model_dump()
+        job.status = "CANCELLED"
+        job.error = "Stopped by user"
+        job.finished_at = datetime.now(timezone.utc).isoformat()
+    activity.publish("info", f"Stop requested for job: {job.kind}", label="job")
+    return job.model_dump()
+
+
+@app.post("/api/jobs/cancel-all")
+def cancel_all_jobs():
+    """Stop every queued/running demo job from the UI's global stop control."""
+    cancelled = []
+    with _LOCK:
+        for job in _JOBS.values():
+            if job.status not in {"PENDING", "RUNNING"}:
+                continue
+            job.status = "CANCELLED"
+            job.error = "Stopped by user"
+            job.finished_at = datetime.now(timezone.utc).isoformat()
+            cancelled.append({"id": job.id, "kind": job.kind})
+    if cancelled:
+        activity.publish("info", f"Stopped {len(cancelled)} running job(s)", label="job")
+    return {"cancelled": cancelled}
 
 
 @app.get("/api/artifacts")

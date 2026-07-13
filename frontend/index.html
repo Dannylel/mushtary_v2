@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mushtary — AI Procurement Console</title>
-  <link rel="stylesheet" href="/styles.css?v=20260713-drafted-tenders" />
+  <link rel="stylesheet" href="/styles.css?v=20260713-job-stop" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 </head>
@@ -529,6 +529,7 @@
       <span class="console-dot" id="consoleDot"></span>
       <span class="console-title">Live activity</span>
       <span class="console-sub" id="consoleSub">idle</span>
+      <button class="console-stop" id="stopAllJobsBtn" type="button" title="Stop all running processes">Stop all</button>
       <button class="console-toggle" id="consoleToggle">▴</button>
     </div>
     <div class="console-body" id="consoleBody"></div>
@@ -563,6 +564,6 @@
       row.querySelector("input")?.focus();
     };
   </script>
-  <script src="/app.js?v=20260713-drafted-tenders"></script>
+  <script src="/app.js?v=20260713-job-stop"></script>
 </body>
 </html>

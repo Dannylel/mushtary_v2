@@ -485,6 +485,7 @@ $("#resetDemoBtn")?.addEventListener("click", resetDemoState);
 const consoleEl = $("#console"), consoleBody = $("#consoleBody"),
       consoleDot = $("#consoleDot"), consoleSub = $("#consoleSub");
 let actLast = 0, actTimer = null, actStopAt = null;
+const activeJobs = new Map();
 const labelClass = {};
 let labelSeq = 0;
 
@@ -554,6 +555,11 @@ async function pollJob(jobId, { onTick, intervalMs = 2000 } = {}) {
     const secs = Math.floor((Date.now() - start) / 1000);
     if (onTick) onTick(secs);
     if (job.status === "SUCCESS") return job.result;
+    if (job.status === "CANCELLED") {
+      const error = new Error("Stopped by user");
+      error.cancelled = true;
+      throw error;
+    }
     if (job.status === "FAILURE") throw new Error(job.error || "Job failed");
     await new Promise(r => setTimeout(r, intervalMs));
   }
@@ -576,17 +582,40 @@ async function runJob({ start, target, loadMain, loadSub, render }) {
   const box = $(target);
   box.innerHTML = loaderHTML(loadMain, loadSub);
   activityStart(loadMain);
+  let jobId = null;
   try {
-    const { job_id } = await start();
-    const result = await pollJob(job_id, { onTick: s => setTimer(box, s) });
+    const started = await start();
+    jobId = started.job_id;
+    activeJobs.set(jobId, box);
+    box.insertAdjacentHTML("beforeend", `<div class="job-stop-wrap"><button class="btn danger job-stop" type="button">Stop this process</button></div>`);
+    $(".job-stop", box)?.addEventListener("click", () => cancelActiveJob(jobId));
+    const result = await pollJob(jobId, { onTick: s => setTimer(box, s) });
     box.innerHTML = render(result);
     box.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (e) {
-    box.innerHTML = errorHTML(e.message);
+    box.innerHTML = e.cancelled ? `<div class="result cancelled-result"><b>Process stopped.</b> No result was applied. You can start a new operation when ready.</div>` : errorHTML(e.message);
   } finally {
+    if (jobId) activeJobs.delete(jobId);
     activityStop();
   }
 }
+
+async function cancelActiveJob(jobId) {
+  const box = activeJobs.get(jobId);
+  if (!box) return;
+  await fetch(`/api/jobs/${encodeURIComponent(jobId)}/cancel`, { method: "POST" });
+  box.innerHTML = `<div class="result cancelled-result"><b>Stopping process…</b> The current job will not apply a result.</div>`;
+}
+
+async function cancelAllActiveJobs(event) {
+  event?.stopPropagation();
+  await fetch("/api/jobs/cancel-all", { method: "POST" });
+  activeJobs.forEach(box => {
+    box.innerHTML = `<div class="result cancelled-result"><b>Stopping process…</b> The current job will not apply a result.</div>`;
+  });
+  activityStop();
+}
+$("#stopAllJobsBtn")?.addEventListener("click", cancelAllActiveJobs);
 
 // ── Rendering primitives ─────────────────────────────────────────────────────────
 function block(num, title, body) {

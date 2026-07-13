@@ -218,6 +218,7 @@ select.input { cursor: pointer; }
 .btn.primary:hover:not(:disabled) { filter: brightness(1.07); transform: translateY(-1px); }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 .btn.ghost { background: #eef1f8; color: var(--ink); }
+.btn.danger { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
 
 /* ── Dropzone ────────────────────────────────────────── */
 .dropzone {
@@ -424,6 +425,8 @@ select.input { cursor: pointer; }
 .hit-text { font-size: 13.5px; line-height: 1.6; color: var(--ink-soft); white-space: pre-wrap; max-height: 130px; overflow: hidden; position: relative; }
 
 .error-box { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; border-radius: 12px; padding: 16px 18px; font-size: 14px; }
+.cancelled-result { border: 1px solid #fde68a; background: #fffbeb; color: #92400e; }
+.job-stop-wrap { margin-top: 12px; }
 .empty { color: var(--muted); font-size: 14px; padding: 8px 2px; }
 
 /* ── Live activity console ───────────────────────────── */
@@ -444,8 +447,10 @@ select.input { cursor: pointer; }
 @keyframes pulse { 50% { opacity: .4; } }
 .console-title { font-weight: 700; font-size: 13px; color: #e2e8f0; }
 .console-sub { font-size: 12px; color: #64748b; }
+.console-stop { margin-left: auto; border: 1px solid rgba(248,113,113,.45); background: rgba(127,29,29,.35); color: #fecaca; border-radius: 7px; padding: 4px 9px; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+.console-stop:hover { background: rgba(185,28,28,.55); }
 .console-toggle {
-  margin-left: auto; background: transparent; border: 0; color: #94a3b8;
+  background: transparent; border: 0; color: #94a3b8;
   font-size: 14px; cursor: pointer; padding: 2px 8px;
 }
 .console.collapsed .console-toggle { transform: rotate(180deg); }
