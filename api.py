@@ -532,61 +532,20 @@ def _job_evaluate() -> dict:
     """Score every vendor in the bundled sample (in isolation), then rank. Reuses the
     builder helpers from the demo script so the input shapes stay in one place."""
     import json as _json
-    from agents.evaluation.agent import EvaluationRankerAgent
-    from agents.evaluation.schemas import (
-        RankingInput, VendorScoringInput, VendorScore, DisqualificationResult,
-        FitScoreBreakdown, CriterionScore,
-    )
-    from agents.samples.run_demo import build_policy, build_criteria, build_vri, build_submission
+    from agents.evaluation.graph import run_evaluation_graph
 
     samples = ROOT / "agents" / "samples"
     tender = _json.loads((samples / "it_infrastructure_tender.json").read_text(encoding="utf-8"))
     subs = _json.loads((samples / "vendor_submissions.json").read_text(encoding="utf-8"))
 
-    policy = build_policy(tender)
-    criteria = build_criteria(tender)
-    agent = EvaluationRankerAgent()
-
-    scores_json = []
-    score_objects = []
-    for vd in subs["submissions"]:
-        payload = VendorScoringInput(
-            tender_id=tender["tender_id"],
-            tender_category=tender["subcategory"],
-            criteria=criteria,
-            submission=build_submission(vd["submission"]),
-            vri=build_vri(vd["vri"]),
-            policy=policy,
-            market_avg_price_sar=tender.get("market_avg_price_sar"),
-        )
-        score_artifact = agent.run(payload)
-        _save_artifact(score_artifact.model_dump(mode="json"))
-        s = score_artifact.output
-        s["vendor_name"] = vd["vendor_name"]  # carry name for display only
-        scores_json.append(s)
-        score_objects.append(VendorScore(
-            vendor_id=s["vendor_id"], submission_id=s["submission_id"],
-            disqualification=DisqualificationResult(**s["disqualification"]),
-            scores_by_criterion=[CriterionScore(**c) for c in s["scores_by_criterion"]],
-            fit_score_breakdown=FitScoreBreakdown(**s["fit_score_breakdown"]),
-            weighted_total=s["weighted_total"], risk_level=s["risk_level"],
-            overall_reasoning=s["overall_reasoning"],
-            missing_requirements=s["missing_requirements"], trace_id=s["trace_id"],
-        ))
-
-    ranking_artifact = agent.rank(RankingInput(
-        tender_id=tender["tender_id"], policy=policy, vendor_scores=score_objects,
-    ))
-    _save_artifact(ranking_artifact.model_dump(mode="json"))
-    ranking = ranking_artifact.output
-
-    # Map vendor_id -> display name so the ranked list can show names.
-    names = {vd["submission"]["vendor_id"]: vd["vendor_name"] for vd in subs["submissions"]}
+    state = run_evaluation_graph(tender, subs["submissions"])
+    for artifact in state["score_artifacts"]:
+        _save_artifact(artifact)
+    _save_artifact(state["ranking_artifact"])
     return {
         "tender_title": tender.get("title", tender["tender_id"]),
-        "scores": scores_json,
-        "ranking": ranking,
-        "vendor_names": names,
+        "scores": state["scores"], "ranking": state["ranking"],
+        "vendor_names": state["vendor_names"],
     }
 
 
