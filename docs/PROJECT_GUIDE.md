@@ -45,6 +45,8 @@ Open `http://localhost:8000`. The application uses a local Ollama-compatible mod
 
 ## Buyer tender workflow
 
+The demo is pinned to one repeatable account pair: **Taif Events Bureau** (`BUY-020`) is the Buyer-Admin and **Alpha Tech Solutions** (`VND-001`) is the vendor. Random account selection is disabled so every recording uses the same profile evidence, saved tender history, proposal, VRI/BRI, and committee context.
+
 1. A user signs in as a demo buyer. The backend assigns the buyer profile and tender reference.
 2. The buyer enters required tender controls and the Scope of Work.
 3. The buyer may run **Evaluate / Rewrite SoW** to obtain a readiness review and a rewritten scope.

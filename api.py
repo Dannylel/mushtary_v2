@@ -85,6 +85,8 @@ _LOCK = threading.Lock()
 _TENDERS: dict[str, dict[str, Any]] = {}
 _PENDING_TENDERS: dict[str, dict[str, Any]] = {}
 _PROPOSALS: dict[str, dict[str, Any]] = {}
+DEMO_BUYER_ID = "BUY-020"  # Taif Events Bureau
+DEMO_VENDOR_ID = "VND-001"  # Alpha Tech Solutions
 
 
 def _save_artifact(artifact: dict[str, Any]) -> dict[str, Any]:
@@ -1019,9 +1021,8 @@ def random_session(req: RandomSessionReq):
     role = req.role.strip().lower()
     if role not in {"buyer", "vendor"}:
         raise HTTPException(400, "role must be buyer or vendor")
-    accounts = list_buyers() if role == "buyer" else list_vendors()
-    account = random.choice(accounts)
-    return {"session": _demo_session(role, account, "random_demo_account")}
+    account = get_buyer(DEMO_BUYER_ID) if role == "buyer" else get_vendor(DEMO_VENDOR_ID)
+    return {"session": _demo_session(role, account, "fixed_demo_account")}
 
 
 def _demo_session(role: str, account: dict[str, Any], mode: str) -> dict[str, Any]:
@@ -1044,7 +1045,10 @@ def account_session(req: AccountSessionReq):
     role = req.role.strip().lower()
     if role not in {"buyer", "vendor"}:
         raise HTTPException(400, "role must be buyer or vendor")
-    account = get_buyer(req.account_id) if role == "buyer" else get_vendor(req.account_id)
+    fixed_account_id = DEMO_BUYER_ID if role == "buyer" else DEMO_VENDOR_ID
+    if req.account_id != fixed_account_id:
+        raise HTTPException(403, f"This demo is pinned to {fixed_account_id} for repeatable workflows")
+    account = get_buyer(fixed_account_id) if role == "buyer" else get_vendor(fixed_account_id)
     if not account:
         raise HTTPException(404, f"{role} account not found")
     return {"session": _demo_session(role, account, "selected_demo_account")}

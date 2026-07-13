@@ -19,6 +19,7 @@ let lastDraftResult = null;
 let reputationData = null;
 let currentSession = null;
 let selectedVendorTenderId = null;
+const FIXED_DEMO_ACCOUNTS = { buyer: "BUY-020", vendor: "VND-001" };
 const PDF_TEMPLATES = [
   ["premium_bw", "Premium B/W"],
   ["modern_bw", "Modern B/W"],
@@ -374,10 +375,9 @@ function renderSession() {
 }
 
 async function signInRandom(role) {
-  const data = await fetch("/api/session/random", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ role }),
+  const data = await fetch("/api/session/account", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ role, account_id: FIXED_DEMO_ACCOUNTS[role] }),
   }).then(r => r.json());
   setDemoSession(data.session);
   show(role === "vendor" ? "vendor-feed" : "overview");
