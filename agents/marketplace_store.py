@@ -72,3 +72,13 @@ def get_tender(tender_id: str) -> dict[str, Any] | None:
     data = json.loads(row["payload_json"])
     data.setdefault("id", row["id"]); data.setdefault("status", row["status"]); data.setdefault("created_at", row["created_at"])
     return data
+
+
+def delete_tender(tender_id: str) -> None:
+    """Remove a superseded draft record after its published tender is stored."""
+    conn = _connect()
+    try:
+        conn.execute("DELETE FROM marketplace_tenders WHERE id = ?", (tender_id,))
+        conn.commit()
+    finally:
+        conn.close()

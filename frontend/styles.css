@@ -524,6 +524,23 @@ select.input { cursor: pointer; }
 .draft-data-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
 .draft-data-table th { background: #f1f5f9; color: var(--muted); text-align: left; font-size: 11px; text-transform: uppercase; padding: 9px; }
 .draft-data-table td { padding: 9px; vertical-align: top; border-top: 1px solid var(--line); }
+.tender-register-card { border: 1px solid var(--line); border-radius: 10px; margin-top: 10px; background: #fff; overflow: hidden; }
+.tender-register-card summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 14px; }
+.tender-register-card summary::-webkit-details-marker { display: none; }
+.tender-register-card summary b, .tender-register-card summary span { display: block; }
+.tender-register-card summary > div > span { color: var(--muted); font-size: 12px; margin-top: 3px; }
+.tender-register-body { border-top: 1px solid var(--line); padding: 14px; }
+.tender-register-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.tender-register-grid > div, .tender-vendor-status { padding: 10px; border-radius: 8px; background: #f8fafc; }
+.tender-register-grid small, .tender-register-grid b, .tender-vendor-status b, .tender-vendor-status span { display: block; }
+.tender-register-grid small { color: var(--muted); font-size: 11px; text-transform: uppercase; }
+.tender-register-grid b { margin-top: 4px; font-size: 13px; }
+.tender-vendor-status { margin-top: 12px; border-left: 3px solid var(--accent); }
+.tender-vendor-status span { color: var(--muted); font-size: 12px; margin-top: 3px; }
+.tender-submissions { margin-top: 12px; }
+.tender-submissions ul { margin: 7px 0 0; padding-left: 18px; }
+.tender-submissions li { margin: 5px 0; }
+.tender-submissions li span { display: block; color: var(--muted); font-size: 12px; }
 
 @media (max-width: 640px) {
   .table-editor-head { flex-direction: column; align-items: stretch; }
@@ -558,6 +575,7 @@ select.input { cursor: pointer; }
   .intel-hero { flex-direction: column; }
   .intel-grid, .reco-grid, .committee-board { grid-template-columns: 1fr; }
   .rep-risk-grid { grid-template-columns: 1fr; }
+  .tender-register-grid { grid-template-columns: 1fr; }
   .main { padding: 24px; }
   .console { left: 12px; right: 12px; }
 }

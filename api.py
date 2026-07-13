@@ -971,7 +971,10 @@ def approve_artifact(artifact_id: str, req: ArtifactApprovalReq):
         published_tender = _publish_tender_artifact(
             pending["artifact"], pending["file_id"], pending["template"], req.buyer_id,
         )
-        _save_marketplace_tender(artifact_id, "approved_draft", req.buyer_id, pending)
+        # The durable published record (keyed by file id) replaces the private
+        # draft entry, preventing duplicate/conflicting tender states in history.
+        from agents.marketplace_store import delete_tender
+        delete_tender(artifact_id)
     return {
         "artifact": artifact,
         "published_tender": published_tender,
@@ -1113,21 +1116,45 @@ def tender_feed(vendor_id: str | None = None):
 
 @app.get("/api/tenders/saved")
 def saved_tenders(buyer_id: str | None = None):
-    """Buyer-visible saved drafts and published tender history, durable across restarts."""
+    """Buyer-visible drafted tender register, including publication and vendor activity."""
     records = _load_marketplace_tenders(buyer_id=buyer_id)
     items = []
     for record in records:
         artifact = record.get("artifact") or {}
         output = artifact.get("output") or {}
+        form = artifact.get("input_snapshot") or {}
+        tender_id = record.get("id")
+        persisted_activity = record.get("proposal_activity") or []
+        live_activity = [proposal for proposal in _PROPOSALS.values() if proposal.get("tender_id") == tender_id]
+        activity_by_id = {item.get("id"): item for item in persisted_activity if item.get("id")}
+        activity_by_id.update({item.get("id"): item for item in live_activity if item.get("id")})
+        submissions = sorted(activity_by_id.values(), key=lambda item: item.get("submitted_at") or "", reverse=True)
+        shortlist = record.get("shortlist") or {}
+        shortlist_count = (shortlist.get("counts") or {}).get("potential_eligible_vendors_found", 0)
+        status = record.get("status")
         items.append({
-            "id": record.get("id"), "status": record.get("status"), "created_at": record.get("created_at"),
-            "title": record.get("title") or output.get("metadata", {}).get("title") or artifact.get("input_snapshot", {}).get("tender_title") or "Tender Draft",
-            "reference": record.get("reference") or output.get("metadata", {}).get("tender_id") or artifact.get("input_snapshot", {}).get("tender_id"),
+            "id": tender_id, "status": status, "created_at": record.get("created_at"),
+            "title": record.get("title") or output.get("metadata", {}).get("title") or form.get("tender_title") or "Tender Draft",
+            "reference": record.get("reference") or output.get("metadata", {}).get("tender_id") or form.get("tender_id"),
             "file_id": record.get("file_id"),
-            "artifact_id": artifact.get("id") or record.get("id"),
-            "publication_status": "Published to vendors" if record.get("status") == "published" else "Private draft - pending Buyer-Admin approval",
+            "artifact_id": artifact.get("id") or tender_id,
+            "publication_status": "Published to vendors" if status == "published" else "Private draft - pending Buyer-Admin approval",
+            "category": record.get("category") or form.get("category"),
+            "location": record.get("location") or form.get("location"),
+            "submission_deadline": record.get("submission_deadline") or form.get("submission_deadline"),
+            "estimated_value_sar": record.get("estimated_value_sar") or form.get("estimated_value_sar"),
+            "deliverable_count": len((output.get("deliverables") or {}).get("deliverables") or form.get("deliverables") or []),
+            "milestone_count": len((output.get("timeline") or {}).get("milestones") or form.get("timeline") or []),
+            "shortlisted_vendor_count": shortlist_count,
+            "submission_count": len(submissions),
+            "submitted_vendors": [{"vendor_id": item.get("vendor_id"), "vendor_name": item.get("vendor_name"), "submitted_at": item.get("submitted_at"), "status": item.get("status")} for item in submissions],
+            "vendor_takeup_status": (
+                f"{len(submissions)} vendor proposal(s) received" if submissions
+                else ("Awaiting vendor proposals" if status == "published" else "Not visible to vendors")
+            ),
+            "award_status": "Buyer decision pending" if submissions else "No vendor selected",
         })
-    return {"tenders": items}
+    return {"tenders": sorted(items, key=lambda item: item.get("created_at") or "", reverse=True)}
 
 
 @app.get("/api/tenders/{tender_id}")
@@ -1169,6 +1196,10 @@ def submit_proposal(tender_id: str, req: ProposalReq):
     }
     with _LOCK:
         _PROPOSALS[proposal_id] = proposal
+        tender.setdefault("proposal_activity", [])
+        tender["proposal_activity"] = [item for item in tender["proposal_activity"] if item.get("vendor_id") != proposal["vendor_id"]]
+        tender["proposal_activity"].append(proposal)
+    _save_marketplace_tender(tender_id, "published", tender.get("buyer_id"), tender)
     return {
         "proposal": proposal,
         "comparison": _proposal_comparison_for_tender(tender),

@@ -1127,15 +1127,31 @@ async function loadSavedTenders() {
   try {
     const response = await fetch(`/api/tenders/saved?buyer_id=${encodeURIComponent(sessionAccountId())}`);
     const data = await response.json();
-    const rows = (data.tenders || []).map(t => `<tr>
-      <td><b>${esc(t.title)}</b><span>${esc(t.reference || "")}</span></td>
-      <td>${esc(t.publication_status)}</td>
-      <td>${esc(t.created_at || "")}</td>
-      <td>${t.file_id ? `<a class="btn ghost" href="/api/download/${esc(t.file_id)}/pdf" target="_blank">Open PDF</a>` : ""}</td>
-    </tr>`).join("");
-    box.innerHTML = `<div class="section-block"><div class="sb-head"><span class="num">S</span>Saved Tender History</div>
-      <div class="sb-body"><p class="hint">Drafts and published tenders are stored locally and remain after restarting the demo.</p>
-      ${rows ? `<div class="rep-table-wrap"><table class="rep-table"><thead><tr><th>Tender</th><th>Status</th><th>Created</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : "<p class='empty'>No saved tenders for this buyer yet.</p>"}</div></div>`;
+    const tenders = data.tenders || [];
+    const cards = tenders.map(t => {
+      const submissions = (t.submitted_vendors || []).map(v => `<li><b>${esc(v.vendor_name || v.vendor_id)}</b><span>Proposal ${esc(v.status || "submitted")} · ${esc(v.submitted_at || "")}</span></li>`).join("");
+      const value = t.estimated_value_sar ? `SAR ${Number(t.estimated_value_sar).toLocaleString()}` : "Not stated";
+      const statusClass = t.status === "published" ? "ok" : "draft";
+      return `<details class="tender-register-card">
+        <summary><div><b>${esc(t.title)}</b><span>${esc(t.reference || "No reference")} · ${esc(t.category || "Uncategorised")}</span></div><span class="badge ${statusClass}">${esc(t.publication_status)}</span></summary>
+        <div class="tender-register-body">
+          <div class="tender-register-grid">
+            <div><small>Location</small><b>${esc(t.location || "Not stated")}</b></div>
+            <div><small>Submission deadline</small><b>${esc(t.submission_deadline || "Not stated")}</b></div>
+            <div><small>Estimated value</small><b>${esc(value)}</b></div>
+            <div><small>Created</small><b>${esc(t.created_at || "")}</b></div>
+            <div><small>Tender content</small><b>${esc(t.deliverable_count || 0)} deliverables · ${esc(t.milestone_count || 0)} milestones</b></div>
+            <div><small>Vendor coverage</small><b>${esc(t.shortlisted_vendor_count || 0)} eligible shortlist matches</b></div>
+          </div>
+          <div class="tender-vendor-status"><b>Vendor activity</b><span>${esc(t.vendor_takeup_status)}</span><span>${esc(t.award_status)}</span></div>
+          ${submissions ? `<div class="tender-submissions"><b>Submitted vendor proposals</b><ul>${submissions}</ul></div>` : ""}
+          <div class="toolbar">${t.file_id ? `<a class="btn ghost" href="/api/download/${esc(t.file_id)}/pdf" target="_blank">Open PDF</a><a class="btn ghost" href="/api/download/${esc(t.file_id)}/json" target="_blank">Open JSON</a>` : ""}</div>
+        </div>
+      </details>`;
+    }).join("");
+    box.innerHTML = `<div class="section-block"><div class="sb-head"><span class="num">D</span>Drafted Tenders</div>
+      <div class="sb-body"><p class="hint">Every tender created by this buyer. Open a tender to see its details, publication state, vendor take-up, and received proposals. Drafts and activity remain stored locally.</p>
+      ${cards || "<p class='empty'>No drafted tenders for this buyer yet.</p>"}</div></div>`;
   } catch (error) {
     box.innerHTML = errorHTML("Could not load saved tender history.");
   }
