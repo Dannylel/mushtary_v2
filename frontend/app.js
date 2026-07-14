@@ -317,9 +317,10 @@ function setDefaultDraftDates() {
 }
 
 // ── Navigation ────────────────────────────────────────────────────────────────
-function show(view) {
+function show(view, demoStage = null) {
   $$(".nav-item").forEach(b => b.classList.toggle("active", b.dataset.view === view));
   $$(".view").forEach(v => v.classList.toggle("active", v.id === `view-${view}`));
+  updateDemoRunway(view, demoStage);
   window.scrollTo({ top: 0 });
   if (view === "vendor-feed") loadVendorFeed();
   if (view === "drafted-tenders") loadSavedTenders();
@@ -327,7 +328,32 @@ function show(view) {
   if (view === "buyer-proposals") loadBuyerProposalComparison();
 }
 $$(".nav-item").forEach(b => b.addEventListener("click", () => show(b.dataset.view)));
-$$("[data-go]").forEach(c => c.addEventListener("click", () => show(c.dataset.go)));
+$$('[data-go]').forEach(c => c.addEventListener("click", () => {
+  if (c.dataset.demoRole === "vendor" && sessionRole() !== "vendor") return switchToVendorSandbox();
+  if (c.dataset.demoRole === "buyer" && sessionRole() !== "buyer") return returnToLastBuyer();
+  show(c.dataset.go, c.dataset.stage || null);
+}));
+
+function updateDemoRunway(view, requestedStage = null) {
+  const stageByView = {
+    draft: "buyer",
+    "drafted-tenders": "publish",
+    "vendor-feed": "vendor",
+    "buyer-proposals": "compare",
+  };
+  const stage = requestedStage || stageByView[view];
+  if (!stage) return;
+  const notes = {
+    buyer: "Buyer stage: establish the business need and the controlled procurement inputs.",
+    assist: "AI-assist stage: review the scope, populate editable content, and keep the buyer in control of every field.",
+    publish: "Approval stage: make the human publication gate explicit before vendors can see anything.",
+    vendor: "Vendor stage: show the buyer trust signals, tender requirements, and controlled proposal submission.",
+    compare: "Decision stage: show comparable evidence and an advisory AI recommendation; the buyer retains the decision.",
+  };
+  $$(".demo-step").forEach(step => step.classList.toggle("active", step.dataset.stage === stage));
+  const note = $("#demoStageNote");
+  if (note) note.textContent = notes[stage] || note.textContent;
+}
 
 // ── Live activity console ─────────────────────────────────────────────────────
 // Demo sign-in
@@ -361,7 +387,7 @@ function updateRoleNavigation() {
   $$("[data-role-view]").forEach(el => {
     el.style.display = !role || el.dataset.roleView === role ? "" : "none";
   });
-  $$(".nav-item, [data-go]").forEach(el => {
+  $$(".nav-item, [data-go]:not(.demo-step)").forEach(el => {
     const view = el.dataset.view || el.dataset.go;
     let visible = true;
     if (role === "vendor" && buyerOnly.includes(view)) visible = false;
@@ -501,16 +527,16 @@ function lblCls(label) {
 function appendEvent(ev) {
   const nearBottom = consoleBody.scrollHeight - consoleBody.scrollTop - consoleBody.clientHeight < 60;
   if (ev.kind === "token") {
-    // Append to the last block if it belongs to the same agent; else start a new block.
+    // Raw model tokens are noisy and frequently contain incomplete JSON. Keep the
+    // live console useful to an audience by showing an intelligible progress state.
     let block = consoleBody.lastElementChild;
     if (!block || !block.classList.contains("con-block") || block.dataset.label !== ev.label) {
       block = document.createElement("div");
       block.className = "con-block";
       block.dataset.label = ev.label;
-      block.innerHTML = `<span class="con-label ${lblCls(ev.label)}">${esc(ev.label)}</span><div class="con-text"></div>`;
+      block.innerHTML = `<span class="con-label ${lblCls(ev.label)}">${esc(ev.label)}</span><div class="con-text">Generating structured, reviewable output…</div>`;
       consoleBody.appendChild(block);
     }
-    $(".con-text", block).textContent += ev.text;
   } else if (ev.kind === "info") {
     const line = document.createElement("div");
     line.className = "con-info";
@@ -522,6 +548,7 @@ function appendEvent(ev) {
     line.textContent = ev.kind === "start" ? `▶ ${ev.label} started writing…` : `✓ ${ev.label} ${ev.text}`;
     consoleBody.appendChild(line);
   }
+  while (consoleBody.children.length > 80) consoleBody.removeChild(consoleBody.firstElementChild);
   if (nearBottom) consoleBody.scrollTop = consoleBody.scrollHeight;
 }
 
@@ -618,8 +645,8 @@ async function cancelAllActiveJobs(event) {
 $("#stopAllJobsBtn")?.addEventListener("click", cancelAllActiveJobs);
 
 // ── Rendering primitives ─────────────────────────────────────────────────────────
-function block(num, title, body) {
-  return `<div class="section-block">
+function block(num, title, body, changed = false) {
+  return `<div class="section-block${changed ? " ai-edited" : ""}">
     <div class="sb-head"><span class="num">${num}</span>${esc(title)}</div>
     <div class="sb-body prose">${body}</div>
   </div>`;
@@ -634,6 +661,23 @@ function sub(title, body) {
   return `<h4>${esc(title)}</h4>${body}`;
 }
 function para(text) { return text ? `<p>${esc(text)}</p>` : ""; }
+function revisionValue(value) {
+  if (value === null || value === undefined || value === "") return "—";
+  if (Array.isArray(value)) return value.map(item => typeof item === "object" ? JSON.stringify(item) : String(item)).join("\n");
+  return typeof value === "object" ? JSON.stringify(value, null, 2) : String(value);
+}
+function renderRevisionComparison(edit) {
+  const records = edit.change_records || [];
+  if (!records.length) return "";
+  return `<div class="revision-comparison section-block">
+    <div class="sb-head"><span class="num">Δ</span>AI Committee Change Comparison <span class="revision-key"><i></i> Removed / replaced <i></i> Added / revised</span></div>
+    <div class="sb-body">${records.map(record => `<div class="revision-row">
+      <div class="revision-path">${esc(record.path || "Tender content")}</div>
+      <div class="revision-before">${esc(revisionValue(record.before))}</div>
+      <div class="revision-after">${esc(revisionValue(record.after))}</div>
+    </div>`).join("")}</div>
+  </div>`;
+}
 function kv(rows) {
   const filled = rows.filter(([, v]) => v !== null && v !== undefined && v !== "");
   if (!filled.length) return "";
@@ -898,6 +942,9 @@ function renderDraft(result) {
   const pay = o.payment_terms || {};
   const ti = o.tender_intelligence || {};
   const consistency = o.consistency_report || {};
+  const committeeEdit = o.ai_committee_edit_applied || {};
+  const changedPaths = committeeEdit.changed_paths || [];
+  const isEdited = (...roots) => changedPaths.some(path => roots.some(root => path === root || path.startsWith(`${root}.`)));
 
   const sections = [];
 
@@ -975,7 +1022,7 @@ function renderDraft(result) {
       ["Maximum File Size", sc.max_file_size_mb ? `${sc.max_file_size_mb} MB` : ""],
       ["Resubmission Before Deadline", yesNo(sc.resubmission_allowed_before_deadline)],
       ["Late Submission Allowed", yesNo(sc.late_submission_allowed)],
-    ]))));
+    ])), isEdited("instructions_to_bidders")));
 
   // 4. Award & Contract
   sections.push(block(4, "Award and Contract",
@@ -984,7 +1031,7 @@ function renderDraft(result) {
     sub("Award Rules", para(award.award_rules)) +
     sub("Bid Security", para(award.bid_security)) +
     sub("Performance Bond", para(award.performance_bond_text)) +
-    sub("Saudization Requirements", para(award.saudization_requirements))));
+    sub("Saudization Requirements", para(award.saudization_requirements)), isEdited("award_and_contract")));
 
   // 5. Vendor Document Requirements
   sections.push(block(5, "Vendor Document Requirements",
@@ -993,7 +1040,7 @@ function renderDraft(result) {
     docList("Mandatory Documents", award.mandatory_documents) +
     docList("Conditional Documents", award.conditional_documents) +
     docList("Sector-Specific Documents", award.sector_specific_documents) +
-    docList("Optional Capability Documents", award.optional_documents)));
+    docList("Optional Capability Documents", award.optional_documents), isEdited("award_and_contract")));
 
   // 6. Proposal Packaging & Format — the financial/commercial requirements live here
   const tp = pf.technical_proposal || {}, cp = pf.commercial_proposal || {};
@@ -1003,7 +1050,7 @@ function renderDraft(result) {
     sub("Commercial Proposal — Pricing Requirements", kv([
       ["File Naming", cp.file_naming_convention],
       ["Accepted Currencies", (cp.accepted_currencies || []).join(", ")],
-    ]) + ul(cp.pricing_requirements))));
+    ]) + ul(cp.pricing_requirements)), isEdited("proposal_format")));
 
   // 7. Project Overview
   sections.push(block(7, "Project Overview",
@@ -1027,7 +1074,7 @@ function renderDraft(result) {
     sub("Technical Requirements (buyer-specified)", para(form.technical_requirements)) +
     sub("Methodology Requirements", para(form.methodology_requirements)) +
     (phases ? `<h4 style="margin-top:18px">Execution Phases</h4>${phases}` : "") +
-    sub("General Requirements", ul(scope.general_requirements))));
+    sub("General Requirements", ul(scope.general_requirements)), isEdited("scope_of_work")));
 
   // 10. Deliverables
   const delItems = `<table class="draft-data-table"><thead><tr><th>Deliverable</th><th>Description / acceptance output</th><th>Format</th><th>Deadline</th></tr></thead><tbody>${(dels.deliverables || []).map(d =>
@@ -1039,7 +1086,7 @@ function renderDraft(result) {
     sub("Required Deliverables", delItems) +
     sub("Approval Process", para(dels.approval_process)) +
     sub("Reporting Requirements", ul(dels.reporting_requirements)) +
-    sub("Escalation Matrix", tiers)));
+    sub("Escalation Matrix", tiers), isEdited("deliverables")));
 
   // 11. Timeline
   const miles = `<table class="draft-data-table"><thead><tr><th>Phase</th><th>Milestone</th><th>Target date / timing</th></tr></thead><tbody>${(tl.milestones || []).map(m =>
@@ -1047,7 +1094,7 @@ function renderDraft(result) {
   sections.push(block(11, "Timeline",
     para(tl.total_duration) +
     sub("Project Phases", ul(tl.project_phases)) +
-    sub("Key Milestones", miles)));
+    sub("Key Milestones", miles), isEdited("timeline")));
 
   // 12. Team Requirements
   const roles = (team.roles || []).map(r =>
@@ -1059,7 +1106,7 @@ function renderDraft(result) {
     sub("Legal Terms", ul(terms.legal_terms)) +
     sub("Compliance Requirements", ul(terms.compliance_requirements)) +
     sub("Language Requirements", para(terms.language_requirements)) +
-    sub("Equipment and Logistics", para(terms.equipment_and_logistics))));
+    sub("Equipment and Logistics", para(terms.equipment_and_logistics)), isEdited("general_terms")));
 
   // 14. Confidentiality
   sections.push(block(14, "Confidentiality", para(o.confidentiality)));
@@ -1075,13 +1122,13 @@ function renderDraft(result) {
     ]) +
     sub("Mandatory Pass/Fail Criteria", ul(ev.mandatory_criteria, c => esc(typeof c === "string" ? c : c.criterion))) +
     sub("Technical Evaluation Parameters", ul(ev.technical_parameters)) +
-    sub("Financial Evaluation Parameters", ul(ev.financial_parameters))));
+    sub("Financial Evaluation Parameters", ul(ev.financial_parameters)), isEdited("evaluation_criteria")));
 
   // 16. Payment Terms
   sections.push(block(16, "Payment Terms",
     sub("Payment Basis", para(pay.payment_basis)) +
     sub("Invoice Requirements", ul(pay.invoice_requirements)) +
-    sub("Payment Timeline", para(pay.payment_timeline))));
+    sub("Payment Timeline", para(pay.payment_timeline)), isEdited("payment_terms")));
 
   // 17. Annexures + 18. Approval
   sections.push(block(17, "Annexures", ul(o.annexures)));
@@ -1097,6 +1144,7 @@ function renderDraft(result) {
       </div>
       <span class="badge draft dot">DRAFT · pending buyer approval</span>
     </div>
+    ${committeeEdit.applied ? `<div class="ai-edit-note"><b>AI committee edits applied</b><span>Red shows replaced content; green shows the approved revision. Downloaded PDFs remain clean.</span></div>${renderRevisionComparison(committeeEdit)}` : ""}
     <div class="toolbar" style="margin-bottom:16px">
       ${fid ? `<a class="btn primary" href="/api/download/${fid}/pdf?template=${encodeURIComponent(activeTemplate)}" target="_blank">⬇ Download ${esc(PDF_TEMPLATES.find(([v]) => v === activeTemplate)?.[1] || "PDF")}</a>
       ${PDF_TEMPLATES.filter(([v]) => v !== activeTemplate).map(([v, label]) => `<a class="btn ghost" href="/api/download/${fid}/pdf?template=${encodeURIComponent(v)}" target="_blank">⬇ ${esc(label)}</a>`).join("")}
@@ -1295,7 +1343,10 @@ $("#populateOptionalBtn").addEventListener("click", () => {
     }),
     render: result => {
       applyPopulatedOptionalSections(result.form || {});
-      return `<div class="result ok-result"><b>Optional sections populated.</b> Review the editable tables and text before generating the tender.</div>`;
+      const fallbackNote = result.source === "scope_fallback"
+        ? " Scope-derived defaults were used because the local AI service was unavailable."
+        : "";
+      return `<div class="result ok-result"><b>Optional sections populated.</b> Review the editable tables and text before generating the tender.${fallbackNote}</div>`;
     },
   });
 });
@@ -1882,11 +1933,16 @@ async function submitDemoProposal(tenderId) {
     technical_summary: value(`#proposalTech-${tenderId}`),
     commercial_summary: value(`#proposalCommercial-${tenderId}`),
   };
-  const data = await fetch(`/api/tenders/${encodeURIComponent(tenderId)}/proposals`, {
+  const response = await fetch(`/api/tenders/${encodeURIComponent(tenderId)}/proposals`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-  }).then(r => r.json());
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    alert(data.detail || "Could not submit the demo proposal.");
+    return;
+  }
   await loadVendorFeed();
   const target = $(`#tender-${tenderId}`);
   if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1963,11 +2019,13 @@ async function loadBuyerProposalComparison() {
   }
   box.innerHTML = loaderHTML("Comparing submitted vendors...", "Applying VRI, risk, probability of success, compliance, and AI committee signals");
   try {
-    const data = await fetch(`/api/proposals/compare?buyer_id=${encodeURIComponent(sessionAccountId())}`).then(r => r.json());
+    const response = await fetch(`/api/proposals/compare?buyer_id=${encodeURIComponent(sessionAccountId())}`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Could not load submitted vendor comparisons.");
     const comparisons = data.comparisons || [];
     box.innerHTML = comparisons.length
       ? comparisons.map(renderProposalComparisonCard).join("")
-      : `<div class="empty-list">No tenders for this buyer yet. Generate a tender first, then submit as a vendor.</div>`;
+      : `<div class="empty-list"><b>No submitted vendor proposals yet.</b><br>Publish a buyer tender, switch to the Vendor Feed, submit a demo proposal, then return here to compare it.</div>`;
   } catch (e) {
     box.innerHTML = errorHTML(e.message);
   }

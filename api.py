@@ -214,6 +214,18 @@ def _load_marketplace_tenders(status: str | None = None, buyer_id: str | None = 
     return list_tenders(status=status, buyer_id=buyer_id)
 
 
+def _hydrate_published_tenders(buyer_id: str | None = None) -> list[dict[str, Any]]:
+    """Restore durable tender/proposal activity so buyer comparison survives a restart."""
+    tenders = _load_marketplace_tenders(status="published", buyer_id=buyer_id)
+    with _LOCK:
+        for tender in tenders:
+            _TENDERS[tender["id"]] = tender
+            for proposal in tender.get("proposal_activity") or []:
+                if proposal.get("id"):
+                    _PROPOSALS[proposal["id"]] = proposal
+    return tenders
+
+
 def _publish_tender_artifact(
     artifact: dict[str, Any],
     file_id: str,
@@ -320,15 +332,27 @@ def _proposal_comparison_for_tender(tender: dict[str, Any]) -> dict[str, Any]:
             tender_id=tender["id"], vendor_id=proposal["vendor_id"], proposal_id=proposal["id"],
             artifact_type="VENDOR_TENDER_COMMITTEE",
         )
-        committee = stored_artifact["output"] if stored_artifact else run_vendor_committee(
-            tender=tender_context, vendor=vendor, proposal=proposal, baseline=baseline_committee,
-        )
+        # Keep the buyer comparison responsive during a live demo. A full multi-agent
+        # committee run is expensive on a local model; reuse it when already stored,
+        # otherwise present the deterministic, evidence-bound shortlist baseline now.
+        # The buyer can still review every submitted proposal immediately.
+        committee = stored_artifact["output"] if stored_artifact else {
+            "final_score": baseline_committee.get("final_score", score.get("ai_recommendation_score", 58)),
+            "final_recommendation": "Initial evidence-based comparison is ready for buyer review.",
+            "recommendation_status": "needs_human_review",
+            "confidence": "medium",
+            "agents": baseline_committee.get("agents") or [],
+            "buyer_questions": ["Confirm proposal assumptions, exclusions, and supporting evidence before any award decision."],
+            "committee_reasoning": ["Fast deterministic comparison used so submitted proposals remain immediately visible to the Buyer-Admin."],
+            "llm_backed": False,
+            "fallback_used": True,
+        }
         score["committee"] = committee
         score["committee_source"] = "deterministic_fallback" if committee.get("fallback_used") else "llm"
         score["deterministic_recommendation_score"] = score.get("ai_recommendation_score")
         score["ai_recommendation_score"] = committee["final_score"]
         score["why_selected"] = (score.get("why_selected") or []) + [committee["final_recommendation"]]
-        if not stored_artifact:
+        if not stored_artifact and committee.get("llm_backed"):
             committee_artifact = AIArtifact(
                 id=uuid.uuid4().hex,
                 trace_id=f"trace_{uuid.uuid4().hex}",
@@ -350,8 +374,9 @@ def _proposal_comparison_for_tender(tender: dict[str, Any]) -> dict[str, Any]:
             committee_artifact_data = committee_artifact.model_dump(mode="json")
             committee_artifact_data["proposal_id"] = proposal["id"]
             stored_artifact = _save_artifact(committee_artifact_data)
-        score["committee_artifact_id"] = stored_artifact["id"]
-        score["committee_approval_status"] = stored_artifact["status"]
+        if stored_artifact:
+            score["committee_artifact_id"] = stored_artifact["id"]
+            score["committee_approval_status"] = stored_artifact["status"]
         score["proposal"] = proposal
         score["vendor"] = vendor
         ranked.append(score)
@@ -499,10 +524,27 @@ def _job_form(seed: str | None) -> dict:
 def _job_populate_optional_sections(project_name: str, scope_text: str, form_overrides: dict | None = None) -> dict:
     """Derive editable optional fields without generating or publishing a tender."""
     from agents.sow_extractor import SoWExtractorAgent
+    from agents.sow_extractor.agent import _fallback_from_text
 
     source = f"Project Name: {project_name.strip()}\n\nScope of Work:\n{scope_text.strip()}"
-    form = SoWExtractorAgent().extract_from_text(source)
-    return {"form": _apply_form_overrides(form, form_overrides).model_dump(mode="json")}
+    try:
+        form = SoWExtractorAgent().extract_from_text(source)
+        source_type = "ai"
+    except Exception as exc:
+        # This control is used during a live demo, where a stopped or warming local
+        # model must not leave the buyer with an inert button.  The extractor's
+        # deterministic fallback still provides reviewable, scope-grounded fields.
+        activity.publish(
+            "info",
+            f"Optional-section AI extraction unavailable; applied scope-derived defaults ({type(exc).__name__}).",
+            label="populate",
+        )
+        form = _fallback_from_text(source, uuid.uuid4().hex[:12])
+        source_type = "scope_fallback"
+    return {
+        "form": _apply_form_overrides(form, form_overrides).model_dump(mode="json"),
+        "source": source_type,
+    }
 
 
 def _job_extract(sow_path: str) -> dict:
@@ -567,6 +609,44 @@ def _committee_agent(committee: dict, name: str) -> dict:
     return next((a for a in agents if str(a.get("agent_name", "")).lower() == name.lower()), {})
 
 
+def _changed_paths(before: Any, after: Any, prefix: str = "") -> list[str]:
+    """Return changed JSON paths for UI-only revision highlighting."""
+    if type(before) is not type(after):
+        return [prefix or "output"]
+    if isinstance(before, dict):
+        paths: list[str] = []
+        for key in sorted(set(before) | set(after)):
+            child = f"{prefix}.{key}" if prefix else key
+            if key not in before or key not in after:
+                paths.append(child)
+            else:
+                paths.extend(_changed_paths(before[key], after[key], child))
+        return paths
+    if isinstance(before, list):
+        return [] if before == after else [prefix]
+    return [] if before == after else [prefix]
+
+
+def _change_records(before: Any, after: Any, prefix: str = "") -> list[dict[str, Any]]:
+    """Produce compact before/after values for browser-only revision comparison."""
+    if type(before) is not type(after):
+        return [{"path": prefix or "output", "before": before, "after": after}]
+    if isinstance(before, dict):
+        records: list[dict[str, Any]] = []
+        for key in sorted(set(before) | set(after)):
+            child = f"{prefix}.{key}" if prefix else key
+            if key not in before:
+                records.append({"path": child, "before": None, "after": after[key]})
+            elif key not in after:
+                records.append({"path": child, "before": before[key], "after": None})
+            else:
+                records.extend(_change_records(before[key], after[key], child))
+        return records
+    if isinstance(before, list):
+        return [] if before == after else [{"path": prefix, "before": before, "after": after}]
+    return [] if before == after else [{"path": prefix, "before": before, "after": after}]
+
+
 def _job_improve_tender(artifact: dict, file_id: str | None = None, template: str | None = None, review_prompt: str | None = None) -> dict:
     """Patch the existing tender artifact using AI Tender Committee feedback."""
     from pdf_renderer import build_pdf, normalize_template
@@ -578,6 +658,10 @@ def _job_improve_tender(artifact: dict, file_id: str | None = None, template: st
 
     edited = _json.loads(_json.dumps(artifact, ensure_ascii=False, default=str))
     output = edited["output"]
+    before_revision = _json.loads(_json.dumps(output, ensure_ascii=False, default=str))
+    intelligence = _json.loads(_json.dumps(output.get("tender_intelligence") or {}, ensure_ascii=False, default=str))
+    committee = intelligence.get("ai_tender_committee") or {}
+    priorities = committee.get("improvement_priorities") or intelligence.get("missing_or_weak_requirements") or []
     if review_prompt:
         try:
             from agents.llm_config import chat_json_text
@@ -591,12 +675,10 @@ def _job_improve_tender(artifact: dict, file_id: str | None = None, template: st
             match = re.search(r"\{.*\}", raw or "", re.S)
             if match:
                 output.update(TenderDraft.model_validate(_json.loads(match.group(0))).model_dump(mode="json"))
+                output["tender_intelligence"] = intelligence
                 output["ai_revision"] = {"mode": "agent", "instruction": review_prompt}
         except Exception:
             output["ai_revision"] = {"mode": "rule_based_fallback", "instruction": review_prompt}
-    intelligence = output.get("tender_intelligence") or {}
-    committee = intelligence.get("ai_tender_committee") or {}
-    priorities = committee.get("improvement_priorities") or intelligence.get("missing_or_weak_requirements") or []
     if not committee and not priorities:
         raise RuntimeError("No AI Committee feedback is available on this tender")
 
@@ -685,11 +767,15 @@ def _job_improve_tender(artifact: dict, file_id: str | None = None, template: st
             + " All bidder questions, buyer responses, and addenda shall be controlled through the approved clarification process and shared consistently with eligible bidders."
         )
 
+    changed_paths = _changed_paths(before_revision, output)
+    change_records = _change_records(before_revision, output)[:40]
     output["ai_committee_edit_applied"] = {
         "applied": True,
         "source": "AI Tender Committee",
         "final_score": committee.get("final_score"),
         "priorities": priorities,
+        "changed_paths": changed_paths,
+        "change_records": change_records,
         "edited_at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -1096,10 +1182,7 @@ def reset_demo_state():
 
 @app.get("/api/tenders/feed")
 def tender_feed(vendor_id: str | None = None):
-    persisted = _load_marketplace_tenders(status="published")
-    with _LOCK:
-        for tender in persisted:
-            _TENDERS[tender["id"]] = tender
+    persisted = _hydrate_published_tenders()
     tenders = [_published_tender_view(t) for t in persisted]
     tenders.sort(key=lambda item: item["created_at"], reverse=True)
     if vendor_id:
@@ -1203,7 +1286,10 @@ def submit_proposal(tender_id: str, req: ProposalReq):
 
     tender = _TENDERS.get(tender_id)
     if not tender:
-        raise HTTPException(404, "tender not found")
+        _hydrate_published_tenders()
+        tender = _TENDERS.get(tender_id)
+    if not tender:
+        raise HTTPException(404, "Published tender not found")
     vendor = get_vendor(req.vendor_id)
     if not vendor:
         raise HTTPException(404, "vendor not found")
@@ -1238,9 +1324,9 @@ def submit_proposal(tender_id: str, req: ProposalReq):
 
 @app.get("/api/proposals/compare")
 def compare_submitted_proposals(buyer_id: str | None = None):
-    tenders = list(_TENDERS.values())
-    if buyer_id:
-        tenders = [tender for tender in tenders if tender.get("buyer_id") == buyer_id]
+    # Tender and proposal activity are durable; hydrate before comparing so this
+    # screen works after role switches, page reloads, and API restarts.
+    tenders = _hydrate_published_tenders(buyer_id)
     comparisons = [
         _proposal_comparison_for_tender(tender)
         for tender in sorted(tenders, key=lambda item: item["created_at"], reverse=True)

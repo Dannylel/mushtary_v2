@@ -13,7 +13,7 @@
     <div class="signin-panel">
       <div class="brand-mark">M</div>
       <h1>Mushtary Demo Sign In</h1>
-      <p>Choose a random account for a presentation, or select a fixed account for repeatable testing.</p>
+      <p>Use the curated buyer and vendor accounts for a polished, repeatable end-to-end presentation.</p>
       <div class="signin-actions">
         <button class="btn primary" id="signinBuyerBtn">Continue as Taif Events Bureau</button>
         <button class="btn ghost" id="signinVendorBtn">Continue as Alpha Tech Solutions</button>
@@ -80,6 +80,20 @@
           <h1>AI Procurement Console</h1>
           <p>A local, fully on-device demo of the Mushtary tendering agents. Nothing leaves this machine.</p>
         </header>
+        <section class="demo-runway" aria-label="Recommended demo journey">
+          <div class="demo-runway-head">
+            <div><span class="eyebrow">Recommended live flow</span><h2>From buyer brief to informed decision</h2></div>
+            <button class="btn primary" data-go="draft">Start buyer demo</button>
+          </div>
+          <div class="demo-steps">
+            <button class="demo-step active" data-go="draft" data-stage="buyer"><span>1</span><b>Define</b><small>Scope &amp; controls</small></button>
+            <button class="demo-step" data-go="draft" data-stage="assist"><span>2</span><b>AI assist</b><small>Review &amp; populate</small></button>
+            <button class="demo-step" data-go="drafted-tenders" data-stage="publish"><span>3</span><b>Approve</b><small>Human publication gate</small></button>
+            <button class="demo-step" data-go="vendor-feed" data-stage="vendor" data-demo-role="vendor"><span>4</span><b>Vendor view</b><small>Trust signals &amp; proposal</small></button>
+            <button class="demo-step" data-go="buyer-proposals" data-stage="compare" data-demo-role="buyer"><span>5</span><b>Compare</b><small>Committee advice</small></button>
+          </div>
+          <p id="demoStageNote" class="demo-stage-note">Begin as the buyer: review the prefilled tender facts and scope, then show AI assistance.</p>
+        </section>
         <div class="grid cards">
           <div class="card feature" data-go="draft">
             <div class="feat-ico">✎</div>
@@ -564,6 +578,6 @@
       row.querySelector("input")?.focus();
     };
   </script>
-  <script src="/app.js?v=20260713-job-stop"></script>
+  <script src="/app.js?v=20260714-demo-runway"></script>
 </body>
 </html>
