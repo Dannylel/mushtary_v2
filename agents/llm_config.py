@@ -18,6 +18,10 @@ endpoint later, set LLM_BASE_URL / LLM_MODEL / LLM_API_KEY explicitly.
 import json
 import os
 import re
+import threading
+import time
+
+from agents.observability import emit, sha256_text, span
 
 # ── Local defaults (Ollama) ────────────────────────────────────────────────────
 DEFAULT_BASE_URL = "http://localhost:11434/v1"
@@ -25,6 +29,20 @@ DEFAULT_MODEL = "qwen2.5:7b-instruct-q4_K_M"
 DEFAULT_API_KEY = "ollama"
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 GEMINI_MODEL = "gemini-3.5-flash"
+
+
+def _bounded_int_env(name: str, default: int, minimum: int, maximum: int) -> int:
+    try:
+        return min(maximum, max(minimum, int(os.getenv(name, str(default)))))
+    except ValueError:
+        return default
+
+
+_LLM_CONCURRENCY = _bounded_int_env("LLM_MAX_CONCURRENCY", 4, 1, 32)
+_LLM_SEMAPHORE = threading.BoundedSemaphore(_LLM_CONCURRENCY)
+_CIRCUIT_LOCK = threading.Lock()
+_CIRCUIT_FAILURES = 0
+_CIRCUIT_OPEN_UNTIL = 0.0
 
 
 def get_provider() -> str:
@@ -53,6 +71,47 @@ def get_api_key() -> str:
     return os.getenv("LLM_API_KEY") or DEFAULT_API_KEY
 
 
+def get_timeout_seconds() -> float:
+    try:
+        return max(1.0, float(os.getenv("LLM_TIMEOUT_SECONDS", "120")))
+    except ValueError:
+        return 120.0
+
+
+def get_max_retries() -> int:
+    return _bounded_int_env("LLM_MAX_RETRIES", 2, 0, 5)
+
+
+def _circuit_before_call() -> None:
+    with _CIRCUIT_LOCK:
+        if time.monotonic() < _CIRCUIT_OPEN_UNTIL:
+            emit("ai.circuit.open", level="WARNING")
+            raise RuntimeError("LLM circuit breaker is open; retry after the cooldown")
+
+
+def _circuit_record(success: bool) -> None:
+    global _CIRCUIT_FAILURES, _CIRCUIT_OPEN_UNTIL
+    threshold = _bounded_int_env("LLM_CIRCUIT_FAILURE_THRESHOLD", 5, 1, 20)
+    try:
+        cooldown = max(1.0, float(os.getenv("LLM_CIRCUIT_COOLDOWN_SECONDS", "60")))
+    except ValueError:
+        cooldown = 60.0
+    with _CIRCUIT_LOCK:
+        if success:
+            _CIRCUIT_FAILURES = 0
+            _CIRCUIT_OPEN_UNTIL = 0.0
+            return
+        _CIRCUIT_FAILURES += 1
+        if _CIRCUIT_FAILURES >= threshold:
+            _CIRCUIT_OPEN_UNTIL = time.monotonic() + cooldown
+            emit(
+                "ai.circuit.opened",
+                level="WARNING",
+                failure_count=_CIRCUIT_FAILURES,
+                cooldown_seconds=cooldown,
+            )
+
+
 def make_client(api_key: str | None = None):
     """Build a raw OpenAI-compatible client pointed at the configured endpoint.
 
@@ -61,7 +120,12 @@ def make_client(api_key: str | None = None):
     """
     from openai import OpenAI
 
-    return OpenAI(base_url=get_base_url(), api_key=api_key or get_api_key())
+    return OpenAI(
+        base_url=get_base_url(),
+        api_key=api_key or get_api_key(),
+        timeout=get_timeout_seconds(),
+        max_retries=get_max_retries(),
+    )
 
 
 # ── LangChain layer (native) ───────────────────────────────────────────────────
@@ -87,7 +151,9 @@ def _make_activity_callback():
 
         def _flush(self):
             if self._buf:
-                activity.publish("token", "".join(self._buf))
+                # Never place raw generated content in the shared operational feed.
+                # The UI only needs a progress heartbeat.
+                activity.publish("token", "")
                 self._buf, self._buf_len = [], 0
 
         def on_chat_model_start(self, serialized, messages, **kwargs):
@@ -107,7 +173,7 @@ def _make_activity_callback():
 
         def on_llm_error(self, error, **kwargs):
             self._flush()
-            activity.publish("end", f"error: {error}")
+            activity.publish("end", "stopped with an error; use the job trace for details")
 
     return _ActivityStreamCallback()
 
@@ -142,6 +208,8 @@ def make_chat_model(temperature: float = 0.4, max_tokens: int | None = None,
         max_tokens=max_tokens,
         streaming=streaming,
         callbacks=callbacks or None,
+        timeout=get_timeout_seconds(),
+        max_retries=get_max_retries(),
         **kwargs,
     )
 
@@ -173,6 +241,24 @@ def _to_lc_messages(messages: list[dict]):
                 content = "/no_think\n" + content
             out.append(HumanMessage(content=content))
     return out
+
+
+def invoke_bounded(model, messages):
+    """Invoke a pre-bound/tool-capable model under the shared reliability controls."""
+    _circuit_before_call()
+    acquired = _LLM_SEMAPHORE.acquire(timeout=get_timeout_seconds())
+    if not acquired:
+        raise TimeoutError("Timed out waiting for an available LLM concurrency slot")
+    try:
+        response = model.invoke(messages)
+    except Exception:
+        _circuit_record(False)
+        raise
+    else:
+        _circuit_record(True)
+        return response
+    finally:
+        _LLM_SEMAPHORE.release()
 
 
 def chat_text(
@@ -218,6 +304,11 @@ def repair_json_text(raw: str | None, output_contract: str, max_tokens: int | No
         max_tokens=max_tokens,
     )
     parsed = _json_object_from_text(repaired)
+    emit(
+        "ai.json_repair.completed" if parsed is not None else "ai.json_repair.failed",
+        level="INFO" if parsed is not None else "WARNING",
+        result_mode="AI_REPAIRED" if parsed is not None else "DETERMINISTIC_FALLBACK",
+    )
     return json.dumps(parsed, ensure_ascii=False) if parsed is not None else raw
 
 
@@ -234,6 +325,7 @@ def chat_json_with_usage(
     raw, usage = chat_with_usage(messages, temperature=temperature, max_tokens=max_tokens)
     parsed = _json_object_from_text(raw)
     if parsed is not None:
+        usage["result_mode"] = "AI_SUCCESS"
         return json.dumps(parsed, ensure_ascii=False), usage, False
 
     original_contract = next((m.get("content", "") for m in messages if m.get("role") == "system"), "")
@@ -255,11 +347,18 @@ def chat_json_with_usage(
         },
     ]
     repaired, repair_usage = chat_with_usage(repair_messages, temperature=0.0, max_tokens=max_tokens)
+    parsed = _json_object_from_text(repaired)
     combined_usage = {
         "input_tokens": usage.get("input_tokens", 0) + repair_usage.get("input_tokens", 0),
         "output_tokens": usage.get("output_tokens", 0) + repair_usage.get("output_tokens", 0),
+        "prompt_sha256": usage.get("prompt_sha256", ""),
+        "result_mode": "AI_REPAIRED" if parsed is not None else "DETERMINISTIC_FALLBACK",
     }
-    parsed = _json_object_from_text(repaired)
+    emit(
+        "ai.json_repair.completed" if parsed is not None else "ai.json_repair.failed",
+        level="INFO" if parsed is not None else "WARNING",
+        result_mode=combined_usage["result_mode"],
+    )
     return (json.dumps(parsed, ensure_ascii=False) if parsed is not None else raw, combined_usage, True)
 
 
@@ -280,12 +379,55 @@ def chat_with_usage(
 ) -> tuple[str | None, dict]:
     """Like chat_text but also returns {input_tokens, output_tokens} for cost tracking."""
     model = make_chat_model(temperature=temperature, max_tokens=max_tokens)
-    response = model.invoke(_to_lc_messages(messages))
-    usage = getattr(response, "usage_metadata", None) or {}
-    return (
-        getattr(response, "content", None),
-        {
+    prompt_fingerprint = sha256_text(
+        json.dumps(messages, ensure_ascii=False, sort_keys=True, default=str)
+    )
+    started = time.perf_counter()
+    with span("llm_call"):
+        _circuit_before_call()
+        emit(
+            "ai.call.started",
+            provider=get_provider(),
+            model=get_model(),
+            prompt_sha256=prompt_fingerprint,
+            message_count=len(messages),
+            temperature=temperature,
+            max_tokens=max_tokens,
+            timeout_seconds=get_timeout_seconds(),
+        )
+        acquired = _LLM_SEMAPHORE.acquire(timeout=get_timeout_seconds())
+        if not acquired:
+            emit("ai.call.failed", level="ERROR", error_type="ConcurrencyTimeout")
+            raise TimeoutError("Timed out waiting for an available LLM concurrency slot")
+        try:
+            response = model.invoke(_to_lc_messages(messages))
+        except Exception as exc:
+            _circuit_record(False)
+            emit(
+                "ai.call.failed",
+                level="ERROR",
+                provider=get_provider(),
+                model=get_model(),
+                duration_ms=round((time.perf_counter() - started) * 1000),
+                error_type=type(exc).__name__,
+                error_message=str(exc)[:500],
+            )
+            raise
+        finally:
+            _LLM_SEMAPHORE.release()
+        usage = getattr(response, "usage_metadata", None) or {}
+        _circuit_record(True)
+        result_usage = {
             "input_tokens": usage.get("input_tokens", 0) if usage else 0,
             "output_tokens": usage.get("output_tokens", 0) if usage else 0,
-        },
-    )
+            "prompt_sha256": prompt_fingerprint,
+            "result_mode": "AI_SUCCESS",
+        }
+        emit(
+            "ai.call.completed",
+            provider=get_provider(),
+            model=get_model(),
+            duration_ms=round((time.perf_counter() - started) * 1000),
+            **result_usage,
+        )
+        return getattr(response, "content", None), result_usage

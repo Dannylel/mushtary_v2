@@ -14,6 +14,7 @@ from pathlib import Path
 
 from agents.base import BaseAgent
 from agents.llm_config import chat_json_text
+from agents.observability import emit
 from agents.buyer_form import (
     Deliverable,
     EvaluationCriteria,
@@ -359,6 +360,7 @@ class SoWExtractorAgent(BaseAgent):
         fallback = _fallback_from_text(source_text, trace_id) if source_text else _FALLBACK_FORM
         if not raw_text:
             logger.error("No output from LLM", extra={"trace_id": trace_id})
+            emit("ai.fallback.applied", level="WARNING", reason="empty_sow_extraction", result_mode="DETERMINISTIC_FALLBACK")
             return fallback
 
         try:
@@ -372,13 +374,15 @@ class SoWExtractorAgent(BaseAgent):
                 text = text[start:end + 1]
             data = json.loads(text.strip())
         except (json.JSONDecodeError, IndexError) as e:
-            logger.error("JSON parse failed: %s", e, extra={"trace_id": trace_id})
+            logger.error("JSON parse failed (%s)", type(e).__name__, extra={"trace_id": trace_id})
+            emit("ai.fallback.applied", level="WARNING", reason="invalid_sow_json", result_mode="DETERMINISTIC_FALLBACK")
             return fallback
 
         if isinstance(data, list):
             data = next((item for item in data if isinstance(item, dict)), {})
         if not isinstance(data, dict):
             logger.error("SoW extraction JSON root must be object", extra={"trace_id": trace_id})
+            emit("ai.fallback.applied", level="WARNING", reason="invalid_sow_root", result_mode="DETERMINISTIC_FALLBACK")
             return fallback
 
         data = _normalize_extraction_data(data, source_text, fallback)
@@ -403,7 +407,8 @@ class SoWExtractorAgent(BaseAgent):
                 for e in (data.get("evaluation_criteria") or [])
             ]
         except Exception as e:
-            logger.error("SoW nested coercion failed: %s", e, extra={"trace_id": trace_id})
+            logger.error("SoW nested coercion failed (%s)", type(e).__name__, extra={"trace_id": trace_id})
+            emit("ai.fallback.applied", level="WARNING", reason="sow_coercion_failed", result_mode="DETERMINISTIC_FALLBACK")
             return fallback
 
         # The platform assigns its own tender reference (TND-ID-NNNN) — the source

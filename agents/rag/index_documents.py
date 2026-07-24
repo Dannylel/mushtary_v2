@@ -16,6 +16,7 @@ Never index un-approved AI drafts.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import logging
 from pathlib import Path
 
@@ -75,6 +76,8 @@ def build_index(
     rebuild: bool = False,
 ) -> VectorStore:
     """Index every supported file under input_path into the tender KB. Returns the store."""
+    if not approved:
+        raise ValueError("RAG ingestion requires approved=True; unapproved material must never enter the production corpus")
     input_path = Path(input_path)
     files = _gather(input_path)
     if not files:
@@ -93,10 +96,18 @@ def build_index(
             "source": path.name,
             "authority": authority,   # law | regulation | policy | past_tender | reference
             "approved": approved,
+            "source_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
         }
         if category:
             meta["category"] = category
-        store.add([Chunk(text=p, metadata=dict(meta)) for p in pieces], show_progress=False)
+        chunks = []
+        for index, piece in enumerate(pieces):
+            chunk_meta = dict(meta)
+            chunk_meta["chunk_id"] = hashlib.sha256(
+                f"{meta['source_sha256']}:{index}:{piece}".encode("utf-8")
+            ).hexdigest()[:24]
+            chunks.append(Chunk(text=piece, metadata=chunk_meta))
+        store.add(chunks, show_progress=False)
 
     store.save(TENDER_KB_DIR)
     print(f"Tender KB now holds {len(store)} chunks at {TENDER_KB_DIR}")

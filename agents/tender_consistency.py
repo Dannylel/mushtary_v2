@@ -13,6 +13,7 @@ from typing import Any
 from agents.buyer_form import TenderBuyerForm
 from agents.llm_config import chat_json_text
 from agents.prompts import GLOBAL_QUALITY_STANDARD
+from agents.observability import emit
 from agents.tender_drafting.schemas import TenderDraft, TenderDeliverable, TenderMilestone
 
 
@@ -83,7 +84,14 @@ Do not rewrite the tender and do not invent facts. Return only JSON:
         data: Any = json.loads(match.group(0)) if match else {}
         items = data.get("findings", []) if isinstance(data, dict) else []
         return [item for item in items if isinstance(item, dict) and item.get("issue")], "agent"
-    except Exception:
+    except Exception as exc:
+        emit(
+            "ai.fallback.applied",
+            level="WARNING",
+            reason="consistency_agent_failed",
+            error_type=type(exc).__name__,
+            result_mode="DETERMINISTIC_FALLBACK",
+        )
         return [], "deterministic_fallback"
 
 

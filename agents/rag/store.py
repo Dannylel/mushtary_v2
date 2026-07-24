@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import json
 import logging
+import hashlib
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -27,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 _VECTORS_FILE = "vectors.npy"
 _CHUNKS_FILE = "chunks.jsonl"
+_MANIFEST_FILE = "manifest.json"
 
 
 class VectorStore:
@@ -35,6 +38,7 @@ class VectorStore:
     def __init__(self) -> None:
         self._vectors: np.ndarray = np.zeros((0, 0), dtype=np.float32)
         self._chunks: list[Chunk] = []
+        self.manifest: dict = {}
 
     def __len__(self) -> int:
         return len(self._chunks)
@@ -104,6 +108,21 @@ class VectorStore:
         with (directory / _CHUNKS_FILE).open("w", encoding="utf-8") as f:
             for chunk in self._chunks:
                 f.write(json.dumps(chunk.model_dump(), ensure_ascii=False) + "\n")
+        from .config import get_embed_model
+        corpus_hash = hashlib.sha256(
+            "\n".join(chunk.text for chunk in self._chunks).encode("utf-8")
+        ).hexdigest()
+        self.manifest = {
+            "schema_version": 1,
+            "built_at": datetime.now(timezone.utc).isoformat(),
+            "embedding_model": get_embed_model(),
+            "chunk_count": len(self._chunks),
+            "vector_dimension": int(self._vectors.shape[1]) if self._vectors.ndim == 2 and self._vectors.size else 0,
+            "corpus_sha256": corpus_hash,
+        }
+        (directory / _MANIFEST_FILE).write_text(
+            json.dumps(self.manifest, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         logger.info("Saved vector store (%d chunks) to %s", len(self._chunks), directory)
 
     @classmethod
@@ -119,4 +138,7 @@ class VectorStore:
         store._vectors = np.load(vec_path).astype(np.float32)
         with chunk_path.open("r", encoding="utf-8") as f:
             store._chunks = [Chunk(**json.loads(line)) for line in f if line.strip()]
+        manifest_path = directory / _MANIFEST_FILE
+        if manifest_path.exists():
+            store.manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         return store

@@ -14,9 +14,13 @@ Run:
 from __future__ import annotations
 
 import threading
-import traceback
 import uuid
 import random
+import os
+import base64
+import hashlib
+import hmac
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -26,8 +30,48 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from agents.observability import (
+    bind_context,
+    current_context,
+    emit as emit_ai_event,
+    ensure_trace,
+    list_events,
+    new_id,
+)
 
 load_dotenv(override=True)
+
+_SESSION_SECRET = os.getenv("MUSHTARY_SESSION_SECRET") or uuid.uuid4().hex
+
+
+def _issue_actor_token(role: str, actor_id: str) -> str:
+    ttl_seconds = max(300, int(os.getenv("MUSHTARY_SESSION_TTL_SECONDS", "28800")))
+    payload = base64.urlsafe_b64encode(
+        json.dumps({
+            "role": role,
+            "actor_id": actor_id,
+            "exp": int(datetime.now(timezone.utc).timestamp()) + ttl_seconds,
+        }, separators=(",", ":")).encode()
+    ).decode().rstrip("=")
+    signature = hmac.new(_SESSION_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    return f"{payload}.{signature}"
+
+
+def _decode_actor_token(value: str) -> dict[str, str] | None:
+    try:
+        payload, signature = value.split(".", 1)
+        expected = hmac.new(_SESSION_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(signature, expected):
+            return None
+        padded = payload + "=" * (-len(payload) % 4)
+        data = json.loads(base64.urlsafe_b64decode(padded).decode())
+        if data.get("role") not in {"buyer", "vendor"} or not data.get("actor_id"):
+            return None
+        if int(data.get("exp") or 0) < int(datetime.now(timezone.utc).timestamp()):
+            return None
+        return data
+    except Exception:
+        return None
 
 ROOT = Path(__file__).parent
 OUTPUTS = ROOT / "outputs"
@@ -41,7 +85,42 @@ app = FastAPI(title="Mushtary Demo API", version="1.0.0")
 @app.middleware("http")
 async def utf8_responses(request: Request, call_next):
     """Make browser/API text encoding explicit for Arabic and English demo content."""
-    response = await call_next(request)
+    request_id = request.headers.get("x-request-id") or new_id("req")
+    trace_id = request.headers.get("traceparent", "").split("-")[1:2]
+    trace_id = f"trace_{trace_id[0]}" if trace_id else new_id("trace")
+    authorization = request.headers.get("authorization", "")
+    claims = _decode_actor_token(authorization[7:]) if authorization.startswith("Bearer ") else None
+    actor_id = claims["actor_id"] if claims else ""
+    request.state.actor = claims
+    started = datetime.now(timezone.utc)
+    with bind_context(
+        request_id=request_id,
+        trace_id=trace_id,
+        actor_id=actor_id,
+        tenant_id=request.headers.get("x-tenant-id", "demo"),
+    ):
+        emit_ai_event("request.started", method=request.method, path=request.url.path)
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            emit_ai_event(
+                "request.failed",
+                level="ERROR",
+                method=request.method,
+                path=request.url.path,
+                error_type=type(exc).__name__,
+                error_message=str(exc)[:500],
+            )
+            raise
+        emit_ai_event(
+            "request.completed",
+            method=request.method,
+            path=request.url.path,
+            status_code=response.status_code,
+            duration_ms=round((datetime.now(timezone.utc) - started).total_seconds() * 1000),
+        )
+        response.headers["x-request-id"] = request_id
+        response.headers["x-trace-id"] = trace_id
     content_type = response.headers.get("content-type", "")
     if (content_type.startswith("text/") or "application/json" in content_type) and "charset=" not in content_type.lower():
         response.headers["content-type"] = f"{content_type}; charset=utf-8"
@@ -61,7 +140,12 @@ class _ActivityLogHandler(logging.Handler):
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
-            activity.publish("info", record.getMessage(), label=record.name.split(".")[-1])
+            text = (
+                "An AI component reported a warning; use the job trace for details."
+                if record.levelno >= logging.WARNING
+                else record.getMessage()[:240]
+            )
+            activity.publish("info", text, label=record.name.split(".")[-1])
         except Exception:  # the feed must never break logging
             pass
 
@@ -82,6 +166,8 @@ class Job(BaseModel):
     finished_at: str | None = None
     result: Any = None
     error: str | None = None
+    trace_id: str
+    actor_id: str | None = None
 
 
 _JOBS: dict[str, Job] = {}
@@ -100,42 +186,101 @@ def _save_artifact(artifact: dict[str, Any]) -> dict[str, Any]:
     return save_artifact(artifact)
 
 
-def _new_job(kind: str) -> Job:
+async def _store_sow_upload(file: UploadFile) -> Path:
+    """Validate and store one bounded PDF without trusting the client filename."""
+    max_bytes = int(os.getenv("MAX_SOW_UPLOAD_BYTES", str(25 * 1024 * 1024)))
+    safe_name = Path(file.filename or "scope.pdf").name
+    if Path(safe_name).suffix.lower() != ".pdf":
+        raise HTTPException(415, "Only PDF Scope of Work uploads are supported")
+    data = await file.read(max_bytes + 1)
+    if len(data) > max_bytes:
+        raise HTTPException(413, f"PDF exceeds the {max_bytes // (1024 * 1024)} MB limit")
+    if not data.startswith(b"%PDF-"):
+        raise HTTPException(422, "Uploaded file is not a valid PDF")
+    path = UPLOADS / f"{uuid.uuid4().hex[:12]}_{safe_name}"
+    path.write_bytes(data)
+    emit_ai_event(
+        "document.uploaded",
+        file_extension=".pdf",
+        size_bytes=len(data),
+        content_sha256=__import__("hashlib").sha256(data).hexdigest(),
+    )
+    return path
+
+
+def _new_job(kind: str, actor_id: str | None = None) -> Job:
+    authenticated_actor = current_context().actor_id
+    if not authenticated_actor:
+        raise HTTPException(401, "An authenticated demo session is required")
+    if actor_id and authenticated_actor != actor_id:
+        raise HTTPException(403, "Session actor does not match the requested actor")
+    context = ensure_trace(actor_id=authenticated_actor)
     job = Job(id=uuid.uuid4().hex[:12], kind=kind,
-              created_at=datetime.now(timezone.utc).isoformat())
+              created_at=datetime.now(timezone.utc).isoformat(),
+              trace_id=context.trace_id, actor_id=context.actor_id or None)
     with _LOCK:
         _JOBS[job.id] = job
     return job
 
 
+def _require_job_access(job: Job, request: Request) -> None:
+    if not job.actor_id:
+        return
+    claims = getattr(request.state, "actor", None)
+    if not claims:
+        raise HTTPException(401, "An authenticated session is required")
+    if claims["actor_id"] != job.actor_id:
+        raise HTTPException(403, "Job belongs to another actor")
+
+
 def _run_async(job: Job, fn, *args, **kwargs) -> None:
     """Execute fn(*args) in a daemon thread, respecting cancellation at safe boundaries."""
     def _target():
-        with _LOCK:
-            if _JOBS[job.id].status == "CANCELLED":
-                return
-            _JOBS[job.id].status = "RUNNING"
-        activity.publish("info", f"Job started: {job.kind}", label="job")
-        try:
-            result = fn(*args, **kwargs)
+        with bind_context(
+            trace_id=job.trace_id,
+            job_id=job.id,
+            actor_id=job.actor_id or "",
+            tenant_id="demo",
+        ):
             with _LOCK:
                 if _JOBS[job.id].status == "CANCELLED":
-                    activity.publish("info", f"Job cancelled: {job.kind}", label="job")
                     return
-                _JOBS[job.id].status = "SUCCESS"
-                _JOBS[job.id].result = result
-                _JOBS[job.id].finished_at = datetime.now(timezone.utc).isoformat()
-            activity.publish("info", f"Job finished: {job.kind}", label="job")
-        except Exception as e:  # surface the failure to the UI rather than dying silently
-            with _LOCK:
-                if _JOBS[job.id].status == "CANCELLED":
-                    activity.publish("info", f"Job cancelled: {job.kind}", label="job")
-                    return
-                _JOBS[job.id].status = "FAILURE"
-                _JOBS[job.id].error = f"{type(e).__name__}: {e}"
-                _JOBS[job.id].finished_at = datetime.now(timezone.utc).isoformat()
-            activity.publish("info", f"Job FAILED: {job.kind} — {e}", label="job")
-            traceback.print_exc()
+                _JOBS[job.id].status = "RUNNING"
+            activity.publish("info", f"Job started: {job.kind}", label="job")
+            emit_ai_event("job.started", kind=job.kind)
+            try:
+                result = fn(*args, **kwargs)
+                with _LOCK:
+                    if _JOBS[job.id].status == "CANCELLED":
+                        activity.publish("info", f"Job cancelled: {job.kind}", label="job")
+                        emit_ai_event("job.cancelled", kind=job.kind)
+                        return
+                    _JOBS[job.id].status = "SUCCESS"
+                    _JOBS[job.id].result = result
+                    _JOBS[job.id].finished_at = datetime.now(timezone.utc).isoformat()
+                activity.publish("info", f"Job finished: {job.kind}", label="job")
+                emit_ai_event("job.completed", kind=job.kind)
+            except Exception as e:  # surface the failure to the UI rather than dying silently
+                with _LOCK:
+                    if _JOBS[job.id].status == "CANCELLED":
+                        activity.publish("info", f"Job cancelled: {job.kind}", label="job")
+                        emit_ai_event("job.cancelled", kind=job.kind)
+                        return
+                    _JOBS[job.id].status = "FAILURE"
+                    _JOBS[job.id].error = (
+                        f"{type(e).__name__}; reference trace {job.trace_id}"
+                    )
+                    _JOBS[job.id].finished_at = datetime.now(timezone.utc).isoformat()
+                activity.publish("info", f"Job FAILED: {job.kind}", label="job")
+                emit_ai_event(
+                    "job.failed", level="ERROR", kind=job.kind,
+                    error_type=type(e).__name__, error_message=str(e)[:500],
+                )
+                logging.getLogger(__name__).error(
+                    "Background AI job failed (%s), trace=%s",
+                    type(e).__name__,
+                    job.trace_id,
+                )
 
     threading.Thread(target=_target, daemon=True).start()
 
@@ -462,6 +607,7 @@ def _job_full_draft(
     buyer_id: str | None = None,
 ) -> dict:
     """Run the full LangGraph pipeline and render the PDF. Returns artifact + file ids."""
+    buyer_id = buyer_id or current_context().actor_id or None
     from agents.graph.modes import run_mode
     from pdf_renderer import build_pdf, normalize_template
 
@@ -657,6 +803,13 @@ def _job_improve_tender(artifact: dict, file_id: str | None = None, template: st
     import json as _json
 
     edited = _json.loads(_json.dumps(artifact, ensure_ascii=False, default=str))
+    parent_artifact_id = str(artifact.get("id") or "")
+    revision_usage = {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "result_mode": "DETERMINISTIC_ENHANCEMENT",
+        "prompt_sha256": "",
+    }
     output = edited["output"]
     before_revision = _json.loads(_json.dumps(output, ensure_ascii=False, default=str))
     intelligence = _json.loads(_json.dumps(output.get("tender_intelligence") or {}, ensure_ascii=False, default=str))
@@ -664,20 +817,32 @@ def _job_improve_tender(artifact: dict, file_id: str | None = None, template: st
     priorities = committee.get("improvement_priorities") or intelligence.get("missing_or_weak_requirements") or []
     if review_prompt:
         try:
-            from agents.llm_config import chat_json_text
+            from agents.llm_config import chat_json_with_usage
+            from agents.observability import sha256_text
+            from agents.prompts import load_prompt
             from agents.tender_drafting.schemas import TenderDraft
             import re
             current_draft = {key: output[key] for key in TenderDraft.model_fields if key in output}
-            raw = chat_json_text(
-                [{"role": "system", "content": "You are the Mushtarry Tender Revision Agent. Revise the supplied existing tender using the committee instruction. Preserve buyer facts. Do not invent dates, amounts, percentages, or legal requirements. Return only JSON matching the existing tender schema."}, {"role": "user", "content": _json.dumps({"review_instruction": review_prompt, "existing_tender": current_draft}, ensure_ascii=False)}],
+            revision_system = load_prompt("tender_revision_system")
+            raw, revision_usage, _ = chat_json_with_usage(
+                [{"role": "system", "content": revision_system}, {"role": "user", "content": _json.dumps({"review_instruction": review_prompt, "existing_tender": current_draft}, ensure_ascii=False)}],
                 temperature=0.1, max_tokens=6000,
             )
+            revision_usage["prompt_sha256"] = sha256_text(revision_system)
             match = re.search(r"\{.*\}", raw or "", re.S)
             if match:
                 output.update(TenderDraft.model_validate(_json.loads(match.group(0))).model_dump(mode="json"))
                 output["tender_intelligence"] = intelligence
                 output["ai_revision"] = {"mode": "agent", "instruction": review_prompt}
-        except Exception:
+        except Exception as exc:
+            emit_ai_event(
+                "ai.fallback.applied",
+                level="WARNING",
+                reason="tender_revision_failed",
+                error_type=type(exc).__name__,
+                result_mode="DETERMINISTIC_FALLBACK",
+            )
+            revision_usage["result_mode"] = "DETERMINISTIC_FALLBACK"
             output["ai_revision"] = {"mode": "rule_based_fallback", "instruction": review_prompt}
     if not committee and not priorities:
         raise RuntimeError("No AI Committee feedback is available on this tender")
@@ -779,6 +944,34 @@ def _job_improve_tender(artifact: dict, file_id: str | None = None, template: st
         "edited_at": datetime.now(timezone.utc).isoformat(),
     }
 
+    from agents.llm_config import get_model, get_provider
+    from agents.observability import sha256_text
+    revision_snapshot = dict(edited.get("input_snapshot") or {})
+    revision_snapshot["_revision"] = {
+        "parent_artifact_id": parent_artifact_id or None,
+        "review_instruction": review_prompt,
+        "parent_output_sha256": sha256_text(
+            _json.dumps(before_revision, ensure_ascii=False, sort_keys=True, default=str)
+        ),
+    }
+    edited.update({
+        "id": uuid.uuid4().hex,
+        "trace_id": current_context().trace_id or new_id("trace"),
+        "status": "DRAFT",
+        "prompt_name": "tender_revision_v1",
+        "prompt_version": "1.0.0",
+        "model_used": get_model(),
+        "provider": get_provider(),
+        "input_tokens": int(revision_usage.get("input_tokens", 0)),
+        "output_tokens": int(revision_usage.get("output_tokens", 0)),
+        "result_mode": revision_usage.get("result_mode", "DETERMINISTIC_ENHANCEMENT"),
+        "prompt_sha256": revision_usage.get("prompt_sha256", ""),
+        "parent_artifact_id": parent_artifact_id or None,
+        "revision_number": int(artifact.get("revision_number") or 1) + 1,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "input_snapshot": revision_snapshot,
+    })
+
     fid = file_id or uuid.uuid4().hex[:12]
     template = normalize_template(template)
     json_path = OUTPUTS / f"tender_{fid}.json"
@@ -787,7 +980,19 @@ def _job_improve_tender(artifact: dict, file_id: str | None = None, template: st
     json_path.write_text(_json.dumps(edited, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
     build_pdf(edited, pdf_path, template=template)
     build_pdf(edited, default_pdf_path, template=template)
-    return {"artifact": edited, "file_id": fid, "template": template, "edited": True}
+    stored = _save_artifact(edited)
+    buyer_id = edited.get("actor_id")
+    pending = {"artifact": stored, "file_id": fid, "template": template, "buyer_id": buyer_id}
+    with _LOCK:
+        _PENDING_TENDERS[stored["id"]] = pending
+    _save_marketplace_tender(stored["id"], "draft", buyer_id, pending)
+    emit_ai_event(
+        "artifact.revised",
+        artifact_id=stored["id"],
+        parent_artifact_id=parent_artifact_id,
+        revision_number=stored["revision_number"],
+    )
+    return {"artifact": stored, "file_id": fid, "template": template, "edited": True}
 
 
 # ── Request models for synchronous endpoints ─────────────────────────────────────
@@ -872,7 +1077,7 @@ class ArtifactApprovalReq(BaseModel):
 
 @app.post("/api/jobs/draft")
 def start_draft(req: SeedReq):
-    job = _new_job("draft")
+    job = _new_job("draft", req.buyer_id)
     _run_async(job, _job_full_draft, req.seed or None, None, None, req.template, req.form_overrides, req.buyer_id)
     return {"job_id": job.id}
 
@@ -883,7 +1088,7 @@ def start_guided_draft(req: GuidedDraftReq):
         f"Project Name: {req.project_name.strip()}\n\n"
         f"Scope of Work:\n{req.scope_text.strip()}"
     )
-    job = _new_job("guided draft")
+    job = _new_job("guided draft", req.buyer_id)
     _run_async(job, _job_full_draft, req.project_name.strip() or None, None, scope_text, req.template, req.form_overrides, req.buyer_id)
     return {"job_id": job.id}
 
@@ -902,13 +1107,12 @@ async def start_draft_sow(
     form_overrides: str | None = Form(None),
     buyer_id: str | None = Form(None),
 ):
-    path = UPLOADS / f"{uuid.uuid4().hex[:8]}_{file.filename}"
-    path.write_bytes(await file.read())
+    path = await _store_sow_upload(file)
     overrides = None
     if form_overrides:
         import json as _json
         overrides = _json.loads(form_overrides)
-    job = _new_job("draft")
+    job = _new_job("draft", buyer_id)
     _run_async(job, _job_full_draft, None, str(path), None, template, overrides, buyer_id)
     return {"job_id": job.id}
 
@@ -931,8 +1135,7 @@ def start_form(req: SeedReq):
 
 @app.post("/api/jobs/extract")
 async def start_extract(file: UploadFile = File(...)):
-    path = UPLOADS / f"{uuid.uuid4().hex[:8]}_{file.filename}"
-    path.write_bytes(await file.read())
+    path = await _store_sow_upload(file)
     job = _new_job("extract")
     _run_async(job, _job_extract, str(path))
     return {"job_id": job.id}
@@ -953,7 +1156,7 @@ def start_validate(req: ValidateReq):
         "selected_categories": req.selected_categories,
         "documents": documents,
     }
-    job = _new_job("validate")
+    job = _new_job("validate", req.vendor_id)
     _run_async(job, _job_validate, payload)
     return {"job_id": job.id}
 
@@ -967,27 +1170,29 @@ def start_evaluate():
 
 @app.post("/api/jobs/improve-tender")
 def start_improve_tender(req: ImproveTenderReq):
-    job = _new_job("improve tender")
+    job = _new_job("improve tender", req.artifact.get("actor_id"))
     _run_async(job, _job_improve_tender, req.artifact, req.file_id, req.template, req.review_prompt)
     return {"job_id": job.id}
 
 
 @app.get("/api/jobs/{job_id}")
-def get_job(job_id: str):
+def get_job(job_id: str, request: Request):
     with _LOCK:
         job = _JOBS.get(job_id)
     if not job:
         raise HTTPException(404, "job not found")
+    _require_job_access(job, request)
     return job.model_dump()
 
 
 @app.post("/api/jobs/{job_id}/cancel")
-def cancel_job(job_id: str):
+def cancel_job(job_id: str, request: Request):
     """Cancel a queued/running demo job and discard any late result safely."""
     with _LOCK:
         job = _JOBS.get(job_id)
         if not job:
             raise HTTPException(404, "job not found")
+        _require_job_access(job, request)
         if job.status in {"SUCCESS", "FAILURE", "CANCELLED"}:
             return job.model_dump()
         job.status = "CANCELLED"
@@ -998,11 +1203,16 @@ def cancel_job(job_id: str):
 
 
 @app.post("/api/jobs/cancel-all")
-def cancel_all_jobs():
+def cancel_all_jobs(request: Request):
     """Stop every queued/running demo job from the UI's global stop control."""
+    claims = getattr(request.state, "actor", None)
+    if not claims:
+        raise HTTPException(401, "An authenticated session is required")
     cancelled = []
     with _LOCK:
         for job in _JOBS.values():
+            if job.actor_id != claims["actor_id"]:
+                continue
             if job.status not in {"PENDING", "RUNNING"}:
                 continue
             job.status = "CANCELLED"
@@ -1015,34 +1225,55 @@ def cancel_all_jobs():
 
 
 @app.get("/api/artifacts")
-def artifacts(tender_id: str | None = None, vendor_id: str | None = None, limit: int = 100):
+def artifacts(
+    actor_id: str,
+    request: Request,
+    tender_id: str | None = None,
+    vendor_id: str | None = None,
+    limit: int = 100,
+):
     """Buyer audit view for persisted model outputs and decision history."""
     from agents.artifact_store import list_artifacts
+    claims = getattr(request.state, "actor", None)
+    if not claims:
+        raise HTTPException(401, "An authenticated session is required")
+    if claims["actor_id"] != actor_id:
+        raise HTTPException(403, "Cannot inspect another actor's artifacts")
 
-    return {"artifacts": list_artifacts(tender_id=tender_id, vendor_id=vendor_id, limit=min(max(limit, 1), 500))}
+    return {"artifacts": list_artifacts(
+        tender_id=tender_id, vendor_id=vendor_id, actor_id=actor_id,
+        limit=min(max(limit, 1), 500),
+    )}
 
 
 @app.get("/api/artifacts/{artifact_id}")
-def artifact_detail(artifact_id: str):
+def artifact_detail(artifact_id: str, actor_id: str, request: Request):
     from agents.artifact_store import get_artifact
 
     artifact = get_artifact(artifact_id)
     if not artifact:
         raise HTTPException(404, "artifact not found")
+    if artifact.get("actor_id") and artifact["actor_id"] != actor_id:
+        raise HTTPException(403, "artifact belongs to another actor")
+    claims = getattr(request.state, "actor", None)
+    if not claims or claims["actor_id"] != actor_id:
+        raise HTTPException(403, "Authenticated actor does not match artifact query")
     return {"artifact": artifact}
 
 
 @app.post("/api/artifacts/{artifact_id}/approve")
-def approve_artifact(artifact_id: str, req: ArtifactApprovalReq):
+def approve_artifact(artifact_id: str, req: ArtifactApprovalReq, request: Request):
     """Record a buyer's approval without allowing AI to approve itself."""
     from agents.artifact_store import approve_artifact as approve_stored_artifact
+    claims = getattr(request.state, "actor", None)
+    if not claims:
+        raise HTTPException(401, "An authenticated buyer session is required")
+    if claims["role"] != "buyer" or claims["actor_id"] != req.buyer_id:
+        raise HTTPException(403, "Authenticated buyer does not match approval actor")
 
-    artifact = approve_stored_artifact(artifact_id, buyer_id=req.buyer_id, note=req.note)
-    if not artifact:
-        raise HTTPException(404, "artifact not found")
     published_tender = None
     with _LOCK:
-        pending = _PENDING_TENDERS.pop(artifact_id, None)
+        pending = _PENDING_TENDERS.get(artifact_id)
     if not pending:
         from agents.marketplace_store import get_tender
         restored = get_tender(artifact_id)
@@ -1050,17 +1281,41 @@ def approve_artifact(artifact_id: str, req: ArtifactApprovalReq):
             pending = restored
     if pending:
         if pending.get("buyer_id") and pending["buyer_id"] != req.buyer_id:
-            with _LOCK:
-                _PENDING_TENDERS[artifact_id] = pending
+            emit_ai_event(
+                "artifact.approval.rejected",
+                level="WARNING",
+                artifact_id=artifact_id,
+                reason="owner_mismatch",
+            )
             raise HTTPException(403, "Only the draft's Buyer-Admin can publish it")
         consistency = (pending.get("artifact", {}).get("output", {}) or {}).get("consistency_report", {})
         if consistency.get("status") == "BLOCKED":
-            with _LOCK:
-                _PENDING_TENDERS[artifact_id] = pending
+            emit_ai_event(
+                "artifact.approval.rejected",
+                level="WARNING",
+                artifact_id=artifact_id,
+                reason="consistency_blocked",
+            )
             raise HTTPException(409, "Publication is blocked until high-severity consistency findings are resolved")
+    artifact = approve_stored_artifact(artifact_id, buyer_id=req.buyer_id, note=req.note)
+    if not artifact:
+        from agents.artifact_store import get_artifact
+        existing = get_artifact(artifact_id)
+        if not existing:
+            raise HTTPException(404, "artifact not found")
+        if existing.get("status") == "APPROVED" and existing.get("approved_by") == req.buyer_id:
+            artifact = existing
+            emit_ai_event("artifact.approval.reused", artifact_id=artifact_id)
+        else:
+            raise HTTPException(409, "Artifact is not an approvable draft owned by this buyer")
+    else:
+        emit_ai_event("artifact.approved", artifact_id=artifact_id, approved_by=req.buyer_id)
+    if pending:
         published_tender = _publish_tender_artifact(
             pending["artifact"], pending["file_id"], pending["template"], req.buyer_id,
         )
+        with _LOCK:
+            _PENDING_TENDERS.pop(artifact_id, None)
         # The durable published record (keyed by file id) replaces the private
         # draft entry, preventing duplicate/conflicting tender states in history.
         from agents.marketplace_store import delete_tender
@@ -1098,17 +1353,38 @@ def meta():
 
 
 @app.get("/api/activity")
-def get_activity(since: int = 0):
+def get_activity(request: Request, since: int = 0, job_id: str | None = None):
     """Live feed of agent activity (streamed model text + lifecycle lines).
 
     The frontend polls this while a job runs to show what the model is writing.
     """
-    events, last = activity.get_since(since)
+    if job_id:
+        with _LOCK:
+            job = _JOBS.get(job_id)
+        if not job:
+            raise HTTPException(404, "job not found")
+        _require_job_access(job, request)
+    events, last = activity.get_since(since, job_id=job_id)
     return {"events": events, "last_id": last}
 
 
+@app.get("/api/ai-events")
+def ai_events(request: Request, trace_id: str | None = None, job_id: str | None = None, limit: int = 500):
+    """Privacy-safe durable incident trace. Raw prompts and outputs are never returned."""
+    if not trace_id and not job_id:
+        raise HTTPException(422, "trace_id or job_id is required")
+    claims = getattr(request.state, "actor", None)
+    if not claims:
+        raise HTTPException(401, "An authenticated session is required")
+    return {"events": list_events(
+        trace_id=trace_id, job_id=job_id, actor_id=claims["actor_id"], limit=limit
+    )}
+
+
 @app.get("/api/kb/search")
-def kb_search(q: str, k: int = 5):
+def kb_search(request: Request, q: str, k: int = 5):
+    if not getattr(request.state, "actor", None):
+        raise HTTPException(401, "An authenticated session is required")
     from agents.rag.knowledge_base import get_tender_kb
 
     hits = get_tender_kb().retrieve(q, k=k, min_score=0.0)
@@ -1141,6 +1417,7 @@ def _demo_session(role: str, account: dict[str, Any], mode: str) -> dict[str, An
         "account": account,
         "signed_in_at": datetime.now(timezone.utc).isoformat(),
         "mode": mode,
+        "token": _issue_actor_token(role, account["account_id"]),
     }
     if role == "buyer":
         session["current_tender_id"] = f"TND-{account['account_id'].replace('BUY-', 'BUY')}-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:4].upper()}"

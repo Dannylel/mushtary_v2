@@ -16,6 +16,7 @@ import logging
 import os
 
 from celery import Celery
+from pydantic import ValidationError
 
 from .evaluation.agent import EvaluationRankerAgent
 from .evaluation.schemas import RankingInput, VendorScore, VendorScoringInput
@@ -42,6 +43,9 @@ celery_app.conf.update(
     task_acks_late=True,            # re-queue on worker crash
     worker_prefetch_multiplier=1,   # one task at a time per worker (AI tasks are heavy)
     result_expires=86400,           # 24 hours
+    task_soft_time_limit=int(os.environ.get("AI_TASK_SOFT_TIME_LIMIT", "300")),
+    task_time_limit=int(os.environ.get("AI_TASK_HARD_TIME_LIMIT", "330")),
+    task_reject_on_worker_lost=True,
 )
 
 
@@ -50,6 +54,13 @@ def _get_api_key() -> str:
     from .llm_config import get_api_key
 
     return get_api_key()
+
+
+def _retry_or_raise(task, exc: Exception):
+    """Do not retry permanent input/schema failures; back off transient runtime failures."""
+    if isinstance(exc, (ValidationError, ValueError, TypeError)):
+        raise exc
+    raise task.retry(exc=exc, countdown=min(120, 15 * (2 ** task.request.retries)))
 
 
 # ── Task 1: Vendor Validation ──────────────────────────────────────────────────
@@ -67,8 +78,8 @@ def run_vendor_validation(self, payload_dict: dict) -> dict:
         artifact = agent.run(payload)
         return artifact.model_dump(mode="json")
     except Exception as exc:
-        logger.error("Vendor validation task failed: %s", exc)
-        raise self.retry(exc=exc, countdown=30)
+        logger.error("Vendor validation task failed (%s)", type(exc).__name__)
+        _retry_or_raise(self, exc)
 
 
 # ── Task 2: Tender Drafting ────────────────────────────────────────────────────
@@ -86,8 +97,8 @@ def run_tender_draft(self, payload_dict: dict) -> dict:
         artifact = agent.run(payload)
         return artifact.model_dump(mode="json")
     except Exception as exc:
-        logger.error("Tender draft task failed: %s", exc)
-        raise self.retry(exc=exc, countdown=30)
+        logger.error("Tender draft task failed (%s)", type(exc).__name__)
+        _retry_or_raise(self, exc)
 
 
 # ── Task 3a: Per-vendor scoring ────────────────────────────────────────────────
@@ -105,8 +116,8 @@ def run_vendor_scoring(self, payload_dict: dict) -> dict:
         artifact = agent.run(payload)
         return artifact.model_dump(mode="json")
     except Exception as exc:
-        logger.error("Vendor scoring task failed: %s", exc)
-        raise self.retry(exc=exc, countdown=30)
+        logger.error("Vendor scoring task failed (%s)", type(exc).__name__)
+        _retry_or_raise(self, exc)
 
 
 # ── Task 3b: Ranking aggregation ───────────────────────────────────────────────
@@ -125,5 +136,5 @@ def run_vendor_ranking(self, vendor_score_dicts: list[dict], tender_id: str) -> 
         artifact = agent.rank(payload)
         return artifact.model_dump(mode="json")
     except Exception as exc:
-        logger.error("Vendor ranking task failed: %s", exc)
-        raise self.retry(exc=exc, countdown=30)
+        logger.error("Vendor ranking task failed (%s)", type(exc).__name__)
+        _retry_or_raise(self, exc)

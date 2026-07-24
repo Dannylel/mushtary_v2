@@ -1,30 +1,30 @@
 # ── Core ───────────────────────────────────────────────────────────────────────
-pydantic>=2.0.0
-python-dotenv>=1.0.0
+pydantic==2.13.4
+python-dotenv==1.2.2
 
 # ── LLM: local-first via LangChain/LangGraph (OpenAI-compatible, e.g. Ollama) ───
-langgraph>=0.2.0
-langchain-core>=0.3.0
-langchain-openai>=0.2.0
-openai>=1.40.0          # transitive (used by langchain-openai) + legacy make_client
+langgraph==1.2.4
+langchain-core==1.4.2
+langchain-openai==1.2.2
+openai==2.41.0
 
 # ── Tender PDF rendering (main.py / run.py) ────────────────────────────────────
-fpdf2>=2.7.0
+fpdf2==2.8.7
 
 # ── Document ingestion (SOW extractor) ─────────────────────────────────────────
-PyMuPDF>=1.23.0
+PyMuPDF==1.27.2.3
 
 # ── RAG: local embeddings + flat vector store (agents/rag) ──────────────────────
 # Embeddings reuse the same local OpenAI-compatible endpoint (Ollama) as generation;
 # only the model differs (default: nomic-embed-text). numpy backs the cosine index.
-numpy>=1.24.0
-tqdm>=4.66.0
+numpy==2.4.6
+tqdm==4.68.2
 
 # ── Demo web UI (FastAPI layer behind the frontend/ console) ───────────────────
-fastapi>=0.110.0
-uvicorn>=0.27.0
-python-multipart>=0.0.9      # file uploads (SOW PDF, etc.)
+fastapi==0.136.3
+uvicorn==0.49.0
+python-multipart==0.0.32
 
 # ── Async task queue (future production layer; optional for local CLI use) ─────
-celery[redis]>=5.3.0
-redis>=5.0.0
+celery[redis]==5.6.3
+redis==6.4.0

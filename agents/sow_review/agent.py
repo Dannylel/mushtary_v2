@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from agents.base import BaseAgent
 from agents.llm_config import chat_json_text, chat_text
+from agents.observability import emit
 from agents.prompts import GLOBAL_QUALITY_STANDARD
 
 logger = logging.getLogger(__name__)
@@ -215,5 +216,10 @@ Buyer draft scope of work:
             result.rewritten_scope = _ensure_detailed_rewrite(project_name, scope_text, result.rewritten_scope)
             return result
         except Exception as e:
-            logger.warning("SoW review failed; using fallback: %s", e)
+            logger.warning("SoW review failed; using fallback (%s)", type(e).__name__)
+            emit(
+                "ai.fallback.applied", level="WARNING",
+                reason="sow_review_failed", error_type=type(e).__name__,
+                result_mode="DETERMINISTIC_FALLBACK",
+            )
             return _fallback(project_name, scope_text)

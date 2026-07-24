@@ -44,7 +44,7 @@ AMALY_MOCK_DB: dict[str, dict] = {
 
 
 def lookup_cr_amaly(cr_number: str) -> CRLookupResult:  # STUB: Amaly / WATHQ API
-    logger.info("[STUB] lookup_cr_amaly called", extra={"cr_number": cr_number})
+    logger.info("[STUB] lookup_cr_amaly called")
     record = AMALY_MOCK_DB.get(cr_number)
     if not record:
         return CRLookupResult(found=False, cr_number=cr_number, status="not_found")
@@ -67,7 +67,7 @@ def lookup_cr_amaly(cr_number: str) -> CRLookupResult:  # STUB: Amaly / WATHQ AP
 # ---------------------------------------------------------------------------
 
 def check_duplicate_vendor(cr_number: str, legal_name_en: str) -> DuplicateCheckResult:  # STUB: DB query
-    logger.info("[STUB] check_duplicate_vendor called", extra={"cr_number": cr_number})
+    logger.info("[STUB] check_duplicate_vendor called")
     # Always returns no duplicate in stub — real impl queries the DB
     return DuplicateCheckResult(is_duplicate=False)
 

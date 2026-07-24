@@ -8,6 +8,7 @@ import logging
 import re
 
 from agents.llm_config import chat_json_text
+from agents.observability import emit
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,15 @@ class BaseSectionAgent:
                 max_tokens=max_tokens,
             )
         except Exception as e:
-            logger.error("%s LLM call failed: %s", self.__class__.__name__, e)
+            logger.error("%s LLM call failed (%s)", self.__class__.__name__, type(e).__name__)
+            emit(
+                "ai.fallback.applied",
+                level="WARNING",
+                agent=self.__class__.__name__,
+                reason="llm_call_failed",
+                error_type=type(e).__name__,
+                result_mode="DETERMINISTIC_FALLBACK",
+            )
             return None
 
     def _generate(self, system: str, user: str, max_tokens: int = 2500) -> dict:
@@ -59,13 +68,36 @@ class BaseSectionAgent:
             from agents.rag.knowledge_base import TenderKnowledgeBase
 
             hits = get_tender_kb().retrieve(query)
+            emit(
+                "rag.query.completed",
+                agent=self.__class__.__name__,
+                hit_count=len(hits),
+                query_sha256=__import__("hashlib").sha256(query.encode("utf-8")).hexdigest(),
+                chunk_ids=[hit.metadata.get("chunk_id", "legacy") for hit in hits],
+                source_sha256=[
+                    hit.metadata.get("source_sha256", "legacy") for hit in hits
+                ],
+                scores=[round(hit.score, 4) for hit in hits],
+            )
             return TenderKnowledgeBase.format_context(hits)
         except Exception as e:  # importing/retrieval must never break a section draft
             logger.debug("%s reference-context lookup skipped: %s", self.__class__.__name__, e)
+            emit(
+                "rag.query.failed",
+                level="WARNING",
+                agent=self.__class__.__name__,
+                error_type=type(e).__name__,
+            )
             return ""
 
     def _parse_json(self, raw: str | None) -> dict:
         if not raw:
+            emit(
+                "ai.fallback.applied",
+                level="WARNING",
+                reason="empty_model_output",
+                result_mode="DETERMINISTIC_FALLBACK",
+            )
             return {}
         text = re.sub(r"<think>.*?</think>", "", raw, flags=re.S).strip()
         if text.startswith("```"):
@@ -78,7 +110,13 @@ class BaseSectionAgent:
         try:
             parsed = json.loads(text.strip())
         except json.JSONDecodeError as e:
-            logger.error("%s JSON parse failed: %s", self.__class__.__name__, e)
+            logger.error("%s JSON parse failed (%s)", self.__class__.__name__, type(e).__name__)
+            emit(
+                "ai.fallback.applied",
+                level="WARNING",
+                reason="json_parse_failed",
+                result_mode="DETERMINISTIC_FALLBACK",
+            )
             return {}
         if isinstance(parsed, dict):
             return parsed

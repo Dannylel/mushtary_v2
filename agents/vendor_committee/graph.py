@@ -12,6 +12,7 @@ from typing import Any, TypedDict
 
 from agents.guardrails import safe_parse
 from agents.llm_config import chat_json_text
+from agents.observability import emit
 from agents.prompts import GLOBAL_QUALITY_STANDARD
 
 from .schemas import CommitteeAgentAssessment, VendorCommitteeOutput
@@ -103,7 +104,13 @@ Return only JSON: {{"agent":"{name}","score":0-100,"summary":"...","evidence":["
             parsed["agent"] = name
             return {key: safe_parse(parsed, CommitteeAgentAssessment, fallback, f"vendor_committee_{key}")}
         except Exception as exc:
-            logger.warning("Vendor committee %s agent failed; using baseline: %s", key, exc)
+            logger.warning("Vendor committee %s agent failed; using baseline (%s)", key, type(exc).__name__)
+            emit(
+                "ai.fallback.applied", level="WARNING",
+                reason="vendor_committee_specialist_failed",
+                specialist=key, error_type=type(exc).__name__,
+                result_mode="DETERMINISTIC_FALLBACK",
+            )
             return {key: fallback}
 
     return node
@@ -132,11 +139,21 @@ def _aggregate(state: CommitteeState) -> dict[str, VendorCommitteeOutput]:
         )
         parsed = _json_object(raw)
         parsed["agents"] = [a.model_dump() for a in agents]
+        weights = [0.30, 0.20, 0.20, 0.15, 0.15]
+        parsed["final_score"] = round(
+            sum(agent.score * weight for agent, weight in zip(agents, weights))
+        )
         parsed["llm_backed"] = True
         parsed["fallback_used"] = False
         return {"committee": safe_parse(parsed, VendorCommitteeOutput, fallback, "vendor_committee_aggregate")}
     except Exception as exc:
-        logger.warning("Vendor committee aggregation failed; using baseline: %s", exc)
+        logger.warning("Vendor committee aggregation failed; using baseline (%s)", type(exc).__name__)
+        emit(
+            "ai.fallback.applied", level="WARNING",
+            reason="vendor_committee_aggregation_failed",
+            error_type=type(exc).__name__,
+            result_mode="DETERMINISTIC_FALLBACK",
+        )
         return {"committee": fallback}
 
 

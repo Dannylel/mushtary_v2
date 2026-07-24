@@ -10,6 +10,7 @@ import re
 from typing import Any
 
 from agents.llm_config import chat_json_text
+from agents.observability import emit
 from agents.prompts import GLOBAL_QUALITY_STANDARD
 
 
@@ -38,6 +39,7 @@ valid, current, or legally sufficient. Return only JSON:
         match = re.search(r"\{.*\}", raw or "", re.S)
         data = json.loads(match.group(0)) if match else {}
         if not isinstance(data, dict):
+            emit("ai.fallback.applied", level="WARNING", reason="invalid_document_assessment", result_mode="DETERMINISTIC_FALLBACK")
             return fallback
         required = [str(v) for v in data.get("required_now", []) if str(v)]
         conditional = [str(v) for v in data.get("conditional", []) if str(v)]
@@ -48,5 +50,10 @@ valid, current, or legally sufficient. Return only JSON:
             "missing_required": sorted((set(required) | BASE_REQUIRED) - set(document_types)),
             "review_flags": [str(v) for v in data.get("review_flags", []) if str(v)],
         }
-    except Exception:
+    except Exception as exc:
+        emit(
+            "ai.fallback.applied", level="WARNING",
+            reason="document_assessment_failed", error_type=type(exc).__name__,
+            result_mode="DETERMINISTIC_FALLBACK",
+        )
         return fallback

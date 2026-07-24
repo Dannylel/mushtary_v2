@@ -72,7 +72,7 @@ REGISTRY: dict[str, dict] = {
     },
     "sow_extract_v1": {
         "name": "sow_extract_v1",
-        "version": "1.2.0",
+        "version": "1.3.0",
         "intent": (
             "Extract a structured TenderBuyerForm from raw SoW/RFP document text "
             "so the drafting pipeline can run from an uploaded PDF."
@@ -199,6 +199,16 @@ REGISTRY: dict[str, dict] = {
         "outputs": ["five specialist assessments", "committee recommendation", "buyer questions"],
         "model": "local (configurable via LLM_MODEL env var)",
         "notes": "Deterministic eligibility gates remain authoritative. Advisory output is never shown to vendors.",
+    },
+    "tender_revision_v1": {
+        "name": "tender_revision_v1",
+        "version": "1.0.0",
+        "intent": "Create an immutable tender revision from a human review instruction.",
+        "agent": "TenderRevisionAgent",
+        "inputs": ["review_instruction", "existing_tender"],
+        "outputs": ["revised TenderDraft"],
+        "model": "local (configurable via LLM_MODEL env var)",
+        "notes": "Every revision is a new DRAFT artifact linked to its parent.",
     },
 }
 

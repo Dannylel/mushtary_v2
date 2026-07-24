@@ -8,10 +8,12 @@ Flow:
   4. Return AIArtifact (status=DRAFT — buyer must approve before publish)
 """
 import logging
+import contextvars
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from agents.base import AIArtifact, BaseAgent
 from agents.llm_config import make_client
+from agents.observability import emit, trace_result_mode, trace_usage
 from agents.tender_drafting.schemas import (
     DRAFT_FALLBACK,
     TenderDraftInput,
@@ -61,7 +63,7 @@ class TenderDrafterAgent(BaseAgent):
         results = {}
         with ThreadPoolExecutor(max_workers=4) as pool:
             futures = {
-                pool.submit(fn, arg): name
+                pool.submit(contextvars.copy_context().run, fn, arg): name
                 for name, (fn, arg) in agents.items()
             }
             for future in as_completed(futures):
@@ -70,7 +72,7 @@ class TenderDrafterAgent(BaseAgent):
                     results[name] = future.result()
                     logger.info("Section agent done: %s", name, extra={"trace_id": trace_id})
                 except Exception as e:
-                    logger.error("Section agent failed: %s — %s", name, e, extra={"trace_id": trace_id})
+                    logger.error("Section agent failed: %s (%s)", name, type(e).__name__, extra={"trace_id": trace_id})
 
         # ── Assemble or fall back ─────────────────────────────────────────────
         try:
@@ -82,16 +84,22 @@ class TenderDrafterAgent(BaseAgent):
                 trace_id=trace_id,
             )
         except Exception as e:
-            logger.error("Assembly failed: %s", e, extra={"trace_id": trace_id})
+            logger.error("Assembly failed (%s)", type(e).__name__, extra={"trace_id": trace_id})
             draft = DRAFT_FALLBACK.model_copy(update={"trace_id": trace_id})
+            emit(
+                "ai.fallback.applied", level="WARNING",
+                reason="assembly_failed", result_mode="DETERMINISTIC_FALLBACK",
+            )
 
+        usage = trace_usage(trace_id)
+        usage["result_mode"] = trace_result_mode(trace_id)
         artifact = self.build_artifact(
             trace_id=trace_id,
             prompt_name=PROMPT_NAME,
             prompt_version=PROMPT_VERSION,
             input_snapshot=input_snapshot,
             output=draft.model_dump(mode="json"),
-            usage={"input_tokens": 0, "output_tokens": 0},
+            usage=usage,
             tender_id=form.tender_id,
             actor_id=payload.buyer_id,
         )

@@ -10,6 +10,7 @@ from typing import Any
 from agents.buyer_form import TenderBuyerForm
 from agents.guardrails import safe_parse
 from agents.llm_config import chat_json_with_usage
+from agents.observability import emit
 from agents.prompts import load_prompt
 from agents.tender_drafting.schemas import TenderDraft
 
@@ -787,7 +788,15 @@ def _run_llm_agent(
         parsed["role"] = fallback.role
         return safe_parse(parsed, TenderHealthAgentResult, fallback, f"health_{label}")
     except Exception as e:
-        logger.warning("Tender health LLM agent failed; using fallback", extra={"agent": label, "error": str(e)})
+        logger.warning("Tender health LLM agent failed; using fallback", extra={"agent": label, "error_type": type(e).__name__})
+        emit(
+            "ai.fallback.applied",
+            level="WARNING",
+            reason="tender_health_agent_failed",
+            health_agent=label,
+            error_type=type(e).__name__,
+            result_mode="DETERMINISTIC_FALLBACK",
+        )
         return fallback
 
 
@@ -829,9 +838,23 @@ def _run_llm_aggregator(
             max_tokens=1200,
         )
         parsed = _loads_json(raw)
-        return safe_parse(parsed, TenderHealthAggregateOutput, fallback, "health_aggregator")
+        validated = safe_parse(parsed, TenderHealthAggregateOutput, fallback, "health_aggregator")
+        deterministic_score = round(
+            agents[0].score * 0.35
+            + agents[1].score * 0.25
+            + agents[2].score * 0.25
+            + agents[3].score * 0.15
+        )
+        return validated.model_copy(update={"tender_quality_score": deterministic_score})
     except Exception as e:
-        logger.warning("Tender health aggregator failed; using fallback", extra={"error": str(e)})
+        logger.warning("Tender health aggregator failed; using fallback", extra={"error_type": type(e).__name__})
+        emit(
+            "ai.fallback.applied",
+            level="WARNING",
+            reason="tender_health_aggregator_failed",
+            error_type=type(e).__name__,
+            result_mode="DETERMINISTIC_FALLBACK",
+        )
         return fallback
 
 

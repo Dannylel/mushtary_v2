@@ -25,6 +25,7 @@ from agents.buyer_form import (
 from agents.categories import ALL_CATEGORIES, CATEGORIES
 from agents.guardrails import safe_parse
 from agents.llm_config import chat_json_text
+from agents.observability import emit
 from agents.prompts import load_prompt
 
 logger = logging.getLogger(__name__)
@@ -155,6 +156,7 @@ class FormGeneratorAgent(BaseAgent):
     def _parse(self, raw: str | None, seed: str | None, trace_id: str) -> TenderBuyerForm:
         fallback = _fallback_form(seed)
         if not raw:
+            emit("ai.fallback.applied", level="WARNING", reason="empty_form_output", result_mode="DETERMINISTIC_FALLBACK")
             return fallback
         try:
             text = raw.strip()
@@ -164,11 +166,13 @@ class FormGeneratorAgent(BaseAgent):
                     text = text[4:]
             data = json.loads(text.strip())
         except (json.JSONDecodeError, IndexError) as e:
-            logger.error("Form generation JSON parse failed: %s", e, extra={"trace_id": trace_id})
+            logger.error("Form generation JSON parse failed (%s)", type(e).__name__, extra={"trace_id": trace_id})
+            emit("ai.fallback.applied", level="WARNING", reason="invalid_form_json", result_mode="DETERMINISTIC_FALLBACK")
             return fallback
         try:
             data = _coerce(data)
         except Exception as e:  # malformed nested objects
-            logger.error("Form coercion failed: %s", e, extra={"trace_id": trace_id})
+            logger.error("Form coercion failed (%s)", type(e).__name__, extra={"trace_id": trace_id})
+            emit("ai.fallback.applied", level="WARNING", reason="form_coercion_failed", result_mode="DETERMINISTIC_FALLBACK")
             return fallback
         return safe_parse(data, TenderBuyerForm, fallback, trace_id)

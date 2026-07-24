@@ -17,7 +17,8 @@ from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
 from agents.base import AIArtifact, BaseAgent
 from agents.guardrails import safe_parse
-from agents.llm_config import make_chat_model, repair_json_text
+from agents.llm_config import invoke_bounded, make_chat_model, repair_json_text
+from agents.observability import emit, sha256_text, span, trace_result_mode
 
 from .prompts import PROMPT_NAME, PROMPT_VERSION, SYSTEM_PROMPT, build_user_message
 from .schemas import (
@@ -138,7 +139,7 @@ class VendorValidationAgent(BaseAgent):
         from agents import activity
 
         activity.set_label("Vendor validation")
-        activity.publish("info", f"Validating vendor {payload.vendor_id} (CR {payload.cr_number})")
+        activity.publish("info", f"Validating vendor {payload.vendor_id}")
 
         input_snapshot = self.sanitize_input(payload.model_dump(mode="json"))
         doc_types = [doc.doc_type for doc in payload.documents]
@@ -162,11 +163,30 @@ class VendorValidationAgent(BaseAgent):
         for round_num in range(self.max_tool_rounds):
             logger.debug("Tool-use loop round %d", round_num + 1, extra={"trace_id": trace_id})
 
-            ai_msg = self._model.invoke(messages)
+            with span("vendor_validation_llm"):
+                emit(
+                    "ai.call.started",
+                    prompt_sha256=sha256_text(SYSTEM_PROMPT + build_user_message(
+                        cr_number=payload.cr_number,
+                        legal_name_ar=payload.legal_name_ar,
+                        legal_name_en=payload.legal_name_en,
+                        selected_categories=payload.selected_categories,
+                        doc_types=doc_types,
+                    )),
+                    attempt=round_num + 1,
+                )
+                ai_msg = invoke_bounded(self._model, messages)
 
             usage = getattr(ai_msg, "usage_metadata", None) or {}
             total_input_tokens += usage.get("input_tokens", 0) if usage else 0
             total_output_tokens += usage.get("output_tokens", 0) if usage else 0
+            emit(
+                "ai.call.completed",
+                attempt=round_num + 1,
+                input_tokens=usage.get("input_tokens", 0) if usage else 0,
+                output_tokens=usage.get("output_tokens", 0) if usage else 0,
+                result_mode="AI_SUCCESS",
+            )
 
             tool_calls = getattr(ai_msg, "tool_calls", None)
 
@@ -182,7 +202,13 @@ class VendorValidationAgent(BaseAgent):
                 activity.publish("info", f"Calling tool: {tc['name']}")
                 result = _dispatch_tool(tc["name"], tc.get("args") or {}, payload.documents)
                 logger.debug("Tool executed", extra={"tool": tc["name"], "trace_id": trace_id})
-                activity.publish("info", f"Tool {tc['name']} returned: {result[:160]}")
+                activity.publish("info", f"Tool {tc['name']} completed")
+                emit(
+                    "tool.call.completed",
+                    tool=tc["name"],
+                    result_sha256=sha256_text(result),
+                    result_length=len(result),
+                )
                 messages.append(ToolMessage(content=result, tool_call_id=tc["id"]))
 
         else:
@@ -215,8 +241,14 @@ class VendorValidationAgent(BaseAgent):
                 "document_assessment": document_assessment,
                 "verification_mode": "DEMO_ADAPTERS_ONLY - not an official registry or document verification result",
             },
-            usage={"input_tokens": total_input_tokens, "output_tokens": total_output_tokens},
+            usage={
+                "input_tokens": total_input_tokens,
+                "output_tokens": total_output_tokens,
+                "prompt_sha256": sha256_text(SYSTEM_PROMPT),
+                "result_mode": trace_result_mode(trace_id),
+            },
             vendor_id=payload.vendor_id,
+            actor_id=payload.vendor_id,
         )
 
         logger.info("VendorValidationAgent complete", extra={"trace_id": trace_id, "outcome": validated.outcome})

@@ -19,6 +19,13 @@ let lastDraftResult = null;
 let reputationData = null;
 let currentSession = null;
 let selectedVendorTenderId = null;
+const _nativeFetch = window.fetch.bind(window);
+window.fetch = (input, init = {}) => {
+  const stored = currentSession || JSON.parse(localStorage.getItem("mushtaryDemoSession") || "null");
+  const headers = new Headers(init.headers || {});
+  if (stored?.token) headers.set("Authorization", `Bearer ${stored.token}`);
+  return _nativeFetch(input, { ...init, headers });
+};
 const FIXED_DEMO_ACCOUNTS = { buyer: "BUY-020", vendor: "VND-001" };
 const PDF_TEMPLATES = [
   ["premium_bw", "Premium B/W"],
@@ -472,6 +479,10 @@ function returnToLastBuyer() {
   const saved = localStorage.getItem("mushtaryLastBuyerSession");
   if (saved) {
     currentSession = JSON.parse(saved);
+    if (!currentSession?.token) {
+      signInRandom("buyer").then(() => show("buyer-proposals"));
+      return;
+    }
     localStorage.setItem("mushtaryDemoSession", JSON.stringify(currentSession));
     renderSession();
     show("buyer-proposals");
@@ -491,6 +502,7 @@ function switchToVendorSandbox() {
 function restoreSession() {
   try {
     currentSession = JSON.parse(localStorage.getItem("mushtaryDemoSession") || "null");
+    if (currentSession && !currentSession.token) currentSession = null;
   } catch {
     currentSession = null;
   }
@@ -510,7 +522,7 @@ $("#resetDemoBtn")?.addEventListener("click", resetDemoState);
 
 const consoleEl = $("#console"), consoleBody = $("#consoleBody"),
       consoleDot = $("#consoleDot"), consoleSub = $("#consoleSub");
-let actLast = 0, actTimer = null, actStopAt = null;
+let actLast = 0, actTimer = null, actStopAt = null, actJobId = null;
 const activeJobs = new Map();
 const labelClass = {};
 let labelSeq = 0;
@@ -554,7 +566,8 @@ function appendEvent(ev) {
 
 async function pollActivity() {
   try {
-    const data = await fetch(`/api/activity?since=${actLast}`).then(r => r.json());
+    const scope = actJobId ? `&job_id=${encodeURIComponent(actJobId)}` : "";
+    const data = await fetch(`/api/activity?since=${actLast}${scope}`).then(r => r.json());
     data.events.forEach(appendEvent);
     if (data.events.length) actLast = data.last_id;
   } catch { /* server briefly unreachable — keep polling */ }
@@ -613,6 +626,7 @@ async function runJob({ start, target, loadMain, loadSub, render }) {
   try {
     const started = await start();
     jobId = started.job_id;
+    actJobId = jobId;
     activeJobs.set(jobId, box);
     box.insertAdjacentHTML("beforeend", `<div class="job-stop-wrap"><button class="btn danger job-stop" type="button">Stop this process</button></div>`);
     $(".job-stop", box)?.addEventListener("click", () => cancelActiveJob(jobId));
@@ -623,6 +637,7 @@ async function runJob({ start, target, loadMain, loadSub, render }) {
     box.innerHTML = e.cancelled ? `<div class="result cancelled-result"><b>Process stopped.</b> No result was applied. You can start a new operation when ready.</div>` : errorHTML(e.message);
   } finally {
     if (jobId) activeJobs.delete(jobId);
+    if (actJobId === jobId) actJobId = null;
     activityStop();
   }
 }

@@ -30,6 +30,9 @@ import uuid
 from agents.base import AIArtifact
 from agents.form_generator.agent import FormGeneratorAgent
 from agents.llm_config import get_model
+from agents.llm_config import get_provider
+from agents.observability import current_context, sha256_text, trace_result_mode, trace_usage
+from agents.prompts import load_prompt
 from agents.sow_extractor.agent import SoWExtractorAgent
 from agents.tender_intelligence import assess_tender_health
 from agents.tender_consistency import reconcile_tender
@@ -80,7 +83,7 @@ def node_legal_eval(state: TenderState) -> dict:
 
 
 def node_assemble(state: TenderState) -> dict:
-    trace_id = f"trace_{uuid.uuid4().hex}"
+    trace_id = current_context().trace_id or f"trace_{uuid.uuid4().hex}"
     form = state["form"]
     draft = assemble_tender_draft(
         ctx=state["context_sections"],
@@ -103,6 +106,18 @@ def node_assemble(state: TenderState) -> dict:
         model_used=get_model(),
         input_tokens=0,
         output_tokens=0,
+        provider=get_provider(),
+        prompt_sha256=sha256_text(
+            "\n".join(
+                load_prompt(name)
+                for name in (
+                    "drafting_context_narrative_system",
+                    "drafting_scope_system",
+                    "drafting_execution_system",
+                    "drafting_legal_eval_system",
+                )
+            )
+        ),
     )
     return {"draft": draft, "artifact": artifact.model_dump(mode="json")}
 
@@ -113,6 +128,9 @@ def node_tender_intelligence(state: TenderState) -> dict:
     output = dict(artifact.get("output") or {})
     output["tender_intelligence"] = health
     artifact["output"] = output
+    usage = trace_usage(artifact["trace_id"])
+    artifact.update(usage)
+    artifact["result_mode"] = trace_result_mode(artifact["trace_id"])
     return {"tender_intelligence": health, "artifact": artifact}
 
 

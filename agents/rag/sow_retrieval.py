@@ -92,5 +92,5 @@ def build_focused_sow_text(raw_text: str, max_chars: int = 12000) -> str:
         return "\n\n...\n\n".join(kept)
     except Exception as e:
         # Any failure (no embed model, server down, etc.) -> original safe behavior.
-        logger.warning("SoW focused retrieval failed (%s); using head+tail truncation.", e)
+        logger.warning("SoW focused retrieval failed (%s); using head+tail truncation.", type(e).__name__)
         return _head_tail_truncation(text, max_chars)

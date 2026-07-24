@@ -15,6 +15,7 @@ __pycache__/
 # RAG index build artifacts (rebuild from agents/rag/sources via index_documents)
 agents/rag/corpora/tender_kb/vectors.npy
 agents/rag/corpora/tender_kb/chunks.jsonl
+agents/rag/corpora/tender_kb/manifest.json
 
 # Editor / OS
 .DS_Store

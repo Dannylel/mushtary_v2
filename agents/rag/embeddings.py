@@ -12,11 +12,15 @@ gracefully — see knowledge_base.py and sow_retrieval.py.
 from __future__ import annotations
 
 import logging
+import os
+import threading
 
 import numpy as np
 from tqdm import tqdm
 
 from agents.llm_config import make_client
+from agents.llm_config import get_timeout_seconds
+from agents.observability import emit, sha256_text
 
 from .config import get_embed_model
 
@@ -24,6 +28,11 @@ logger = logging.getLogger(__name__)
 
 # Ollama embedding endpoints are happiest with modest batches; keep requests small.
 _BATCH_SIZE = 32
+try:
+    _MAX_CONCURRENCY = min(16, max(1, int(os.getenv("RAG_MAX_CONCURRENCY", "2"))))
+except ValueError:
+    _MAX_CONCURRENCY = 2
+_SEMAPHORE = threading.BoundedSemaphore(_MAX_CONCURRENCY)
 
 
 def _normalize(matrix: np.ndarray) -> np.ndarray:
@@ -51,7 +60,19 @@ def embed_texts(texts: list[str], show_progress: bool = False) -> np.ndarray:
     )
     for start in iterator:
         batch = texts[start : start + _BATCH_SIZE]
-        resp = client.embeddings.create(model=model, input=batch)
+        acquired = _SEMAPHORE.acquire(timeout=get_timeout_seconds())
+        if not acquired:
+            raise TimeoutError("Timed out waiting for an embedding concurrency slot")
+        try:
+            resp = client.embeddings.create(model=model, input=batch)
+        finally:
+            _SEMAPHORE.release()
+        emit(
+            "rag.embedding.completed",
+            model=model,
+            batch_size=len(batch),
+            input_sha256=sha256_text("\n".join(batch)),
+        )
         # OpenAI-compatible response preserves input order in resp.data.
         vectors.extend(item.embedding for item in resp.data)
 
