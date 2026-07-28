@@ -100,6 +100,12 @@ SPECIAL_BADGES = [
     "Strategic Partner",
 ]
 
+# These profiles power the local demo only.  They deliberately resemble the
+# information needed by the product-intelligence specifications, but they are
+# not real companies, documents, issuer verifications, contracts, or ratings.
+DEMO_DATA_NOTICE = "synthetic_demo_only"
+VENDOR_DATA_SCHEMA_VERSION = "vendor_profile_demo_v2"
+
 
 def _clamp(value: float, low: float = 0.0, high: float = 100.0) -> float:
     return max(low, min(high, value))
@@ -193,6 +199,149 @@ def _rating_from_score(score: float) -> float:
     return round(2.8 + (_clamp(score) / 100) * 2.0, 1)
 
 
+def _demo_document(
+    document_type: str,
+    *,
+    tier: str,
+    issuer: str,
+    status: str = "verified_demo",
+    expires_on: str | None = None,
+    required_for: str = "Vendor profile",
+) -> dict[str, Any]:
+    """Structured fake document metadata for exercising vendor intelligence flows.
+
+    No raw files are attached. The fields make it possible to build the future
+    onboarding, policy, expiry, evidence, and review UI against stable data.
+    """
+    return {
+        "document_type": document_type,
+        "requirement_tier": tier,
+        "issuer": issuer,
+        "status": status,
+        "verification_status": DEMO_DATA_NOTICE,
+        "issued_on": "2025-01-15",
+        "expires_on": expires_on,
+        "required_for": required_for,
+        "evidence_reference": f"DEMO-{document_type.upper()}-METADATA",
+    }
+
+
+def _sector_license_for(categories: list[str], index: int) -> dict[str, Any]:
+    rules = [
+        ("Information Technology", "cst_nca_license", "CST / NCA", "Digital infrastructure and cybersecurity"),
+        ("Telecommunications", "cst_license", "CST", "Telecommunications services"),
+        ("Financial Services & Fintech", "sama_license", "SAMA", "Financial services"),
+        ("Healthcare & Life Sciences", "sfda_license", "SFDA", "Healthcare, pharma, or food products"),
+        ("Energy & Utilities", "energy_regulator_license", "Energy regulator", "Energy and utilities services"),
+        ("Facilities Management", "baladi_license", "Balady / Municipality", "Municipal and facilities activities"),
+        ("Logistics & Supply Chain", "tga_ncec_license", "TGA / NCEC", "Transportation, logistics, or environmental services"),
+        ("Media, Marketing & Events", "media_culture_license", "Ministry of Media / Ministry of Culture", "Media and event activities"),
+        ("Tourism, Hospitality & Entertainment", "tourism_license", "Ministry of Tourism", "Tourism and hospitality activities"),
+        ("Education & Training", "tvtc_education_license", "TVTC / Ministry of Education", "Education and training activities"),
+    ]
+    for category, document_type, issuer, applicability in rules:
+        if category in categories:
+            return _demo_document(
+                document_type,
+                tier="sector_specific",
+                issuer=issuer,
+                status="review_due" if index % 11 == 7 else "verified_demo",
+                expires_on=f"202{7 + index % 2}-08-31",
+                required_for=applicability,
+            )
+    return _demo_document(
+        "other_sector_license",
+        tier="sector_specific",
+        issuer="Relevant sector authority",
+        status="not_applicable_demo",
+        required_for="No mapped sector license in this demo profile",
+    )
+
+
+def _vendor_documents(index: int, vendor_id: str, categories: list[str]) -> dict[str, dict[str, Any]]:
+    """Return a complete fake document profile based on the vendor framework."""
+    year = 7 + index % 2
+    foreign_owned = index % 12 == 5
+    documents = {
+        "commercial_registration": _demo_document("commercial_registration", tier="mandatory", issuer="Ministry of Commerce", expires_on=f"202{year}-12-31", required_for="All vendors"),
+        "articles_of_association": _demo_document("articles_of_association", tier="mandatory", issuer="Vendor corporate record", status="provided_demo", required_for="Companies where applicable"),
+        "national_address": _demo_document("national_address", tier="mandatory", issuer="SPL / Wasel", expires_on=f"202{year}-06-30", required_for="All vendors"),
+        "authorized_signatory_id": _demo_document("authorized_signatory_id", tier="mandatory", issuer="National ID / Iqama", expires_on=f"202{year}-11-30", required_for="All vendors"),
+        "authorization_letter": _demo_document("authorization_letter", tier="mandatory", issuer="Vendor corporate record", expires_on=f"202{year}-10-31", required_for="All vendors"),
+        "iban_certificate": _demo_document("iban_certificate", tier="mandatory", issuer="Bank", expires_on=f"202{year}-09-30", required_for="All vendors"),
+        "vat_certificate": _demo_document("vat_certificate", tier="conditional", issuer="ZATCA", expires_on=f"202{year}-09-30", required_for="VAT-registered vendor"),
+        "zakat_tax_certificate": _demo_document("zakat_tax_certificate", tier="conditional", issuer="ZATCA", expires_on=f"202{year}-07-31", required_for="Where buyer or regulation requires clearance"),
+        "brand_registration": _demo_document("brand_registration", tier="conditional", issuer="SAIP", status="provided_demo" if index % 3 == 0 else "not_applicable_demo", required_for="Registered brand where applicable"),
+        "misa_investment_license": _demo_document("misa_investment_license", tier="conditional", issuer="MISA", status="verified_demo" if foreign_owned else "not_applicable_demo", expires_on=f"202{year}-05-31" if foreign_owned else None, required_for="Foreign company operating in KSA"),
+        "etimad_registration": _demo_document("etimad_registration", tier="government_conditional", issuer="Etimad", status="verified_demo" if index % 3 != 1 else "not_submitted_demo", required_for="Government procurement"),
+        "nafath_verified_account": _demo_document("nafath_verified_account", tier="government_conditional", issuer="Nafath / Absher", status="verified_demo" if index % 4 != 2 else "review_due", required_for="Identity and authorization flows"),
+        "gosi_certificate": _demo_document("gosi_certificate", tier="government_conditional", issuer="GOSI", expires_on=f"202{year}-04-30", required_for="Government or regulated procurement where applicable"),
+        "saudization_certificate": _demo_document("saudization_certificate", tier="government_conditional", issuer="Nitaqat", status="review_due" if index % 9 == 8 else "verified_demo", expires_on=f"202{year}-03-31", required_for="Government procurement where applicable"),
+        "sector_license": _sector_license_for(categories, index),
+        "company_profile": _demo_document("company_profile", tier="optional_capability", issuer="Vendor", status="provided_demo", required_for="Capability evidence"),
+        "iso_certifications": _demo_document("iso_certifications", tier="optional_capability", issuer="Accredited certification body", status="provided_demo", expires_on=f"202{year}-08-31", required_for="Capability and buyer trust"),
+        "past_project_references": _demo_document("past_project_references", tier="optional_capability", issuer="Previous clients", status="provided_demo", required_for="Experience evidence"),
+        "client_recommendation_letters": _demo_document("client_recommendation_letters", tier="optional_capability", issuer="Previous clients", status="provided_demo" if index % 3 else "not_submitted_demo", required_for="Optional credibility evidence"),
+        "government_classification_certificate": _demo_document("government_classification_certificate", tier="optional_capability", issuer="Relevant authority", status="provided_demo" if index % 5 == 0 else "not_applicable_demo", required_for="Optional classification evidence"),
+    }
+    # A stable fake reference allows a future document store to associate all
+    # records with the right fictional vendor without resembling a real CR.
+    documents["commercial_registration"]["extracted_fields"] = {
+        "cr_number": f"799{index + 1:07d}",
+        "legal_name_reference": f"DEMO-LEGAL-NAME-{vendor_id}",
+        "activities": categories,
+    }
+    return documents
+
+
+def _institutional_verification_records(index: int, score: float) -> list[dict[str, Any]]:
+    return [
+        {
+            "institution": institution,
+            "verification_type": "vendor_registration_or_prequalification",
+            "status": "verified_demo",
+            "verified_on": "2025-02-01",
+            "expires_on": f"202{7 + index % 2}-12-31",
+            "evidence_reference": f"DEMO-INST-{index + 1:03d}-{position}",
+            "data_status": DEMO_DATA_NOTICE,
+        }
+        for position, institution in enumerate(_institutional_verifications(index, score), start=1)
+    ]
+
+
+def _vendor_contract_history(index: int, vendor_id: str, categories: list[str], completed_contracts: int) -> list[dict[str, Any]]:
+    count = min(3, max(1, completed_contracts))
+    return [
+        {
+            "contract_id": f"DEMO-CON-{vendor_id}-{position:02d}",
+            "category": categories[position % len(categories)],
+            "completion_status": "accepted_demo" if not (index % 8 == 6 and position == count) else "corrective_action_closed_demo",
+            "completed_on": f"202{3 + position}-0{position + 2}-15",
+            "value_band": ["small", "medium", "large"][((index + position) % 3)],
+            "delivery_outcome": "on_time_demo" if (index + position) % 4 else "late_but_accepted_demo",
+            "evidence_reference": f"DEMO-ACCEPTANCE-{vendor_id}-{position:02d}",
+            "data_status": DEMO_DATA_NOTICE,
+        }
+        for position in range(1, count + 1)
+    ]
+
+
+def _vendor_rating_history(index: int, vendor_id: str, rating: float) -> list[dict[str, Any]]:
+    return [
+        {
+            "rating_id": f"DEMO-RATING-{vendor_id}-{position:02d}",
+            "contract_reference": f"DEMO-CON-{vendor_id}-{position:02d}",
+            "overall_rating": round(max(1.0, min(5.0, rating + (position - 2) * 0.2)), 1),
+            "categories": {"technical_capability": 4, "delivery_timeliness": 4 + (position % 2), "quality": 4, "communication": 4, "professional_conduct": 5},
+            "submission_mode": "blind_rating_revealed_demo",
+            "review_status": "revealed_demo",
+            "submitted_on": f"202{3 + position}-0{position + 3}-20",
+            "data_status": DEMO_DATA_NOTICE,
+        }
+        for position in range(1, 4)
+    ]
+
+
 def _base_vendor(index: int) -> dict[str, Any]:
     category, subcategory = _category_pair(index)
     secondary_category, secondary_subcategory = _category_pair(index + 5)
@@ -236,13 +385,32 @@ def _base_vendor(index: int) -> dict[str, Any]:
         certifications += ["ISO 45001", "ISO 14001"]
 
     vendor_id = f"VND-{index + 1:03d}"
+    document_profile = _vendor_documents(index, vendor_id, categories)
+    institutional_records = _institutional_verification_records(index, institutional)
     return {
         "account_id": vendor_id,
         "role": "vendor",
+        "data_status": DEMO_DATA_NOTICE,
+        "data_schema_version": VENDOR_DATA_SCHEMA_VERSION,
+        "profile_as_of": "2026-04-20",
         "name": VENDOR_NAMES[index],
         "email": f"vendor{index + 1:02d}@demo.mushtary.local",
         "status": "active" if index % 9 != 8 else "under_review",
         "city": ["Riyadh", "Jeddah", "Dammam", "Makkah", "Madinah", "Khobar"][index % 6],
+        "organization": {
+            "organization_id": f"DEMO-ORG-{vendor_id}",
+            "entity_type": "company_demo" if index % 4 else "establishment_demo",
+            "legal_name_reference": f"DEMO-LEGAL-NAME-{vendor_id}",
+            "cr_number": f"799{index + 1:07d}",
+            "cr_activities": categories,
+            "country": "Saudi Arabia",
+            "dual_role_enabled": index % 7 == 0,
+            "role_contexts": ["vendor"] + (["buyer"] if index % 7 == 0 else []),
+            "users": [
+                {"user_id": f"DEMO-{vendor_id}-ADMIN", "role": "vendor_admin", "status": "active_demo"},
+                {"user_id": f"DEMO-{vendor_id}-USER", "role": "vendor_user", "status": "active_demo"},
+            ],
+        },
         "categories": categories,
         "subcategories": subcategories,
         "years_experience": years_experience,
@@ -256,23 +424,38 @@ def _base_vendor(index: int) -> dict[str, Any]:
         "dispute_rate": round(max(0.4, 8.5 - delivery / 14 + (index % 3) * 0.6), 1),
         "rating": rating,
         "certifications": certifications,
-        "document_profile": {
-            "commercial_registration": {"status": "verified_demo", "expires_on": f"202{7 + index % 2}-12-31"},
-            "vat_certificate": {"status": "verified_demo", "expires_on": f"202{7 + index % 2}-09-30"},
-            "national_address": {"status": "verified_demo", "expires_on": f"202{7 + index % 2}-06-30"},
-            "saudization_certificate": {"status": "review_due" if index % 9 == 8 else "verified_demo", "expires_on": f"202{7 + index % 2}-03-31"},
+        "document_profile": document_profile,
+        "document_requirements_summary": {
+            "mandatory_status": "complete_demo",
+            "conditional_status": "review_required_demo" if index % 9 == 8 else "complete_demo",
+            "sector_specific_status": document_profile["sector_license"]["status"],
+            "government_eligibility_status": document_profile["etimad_registration"]["status"],
+            "missing_documents": [],
+            "review_flags": ["Synthetic metadata only; not an issuer verification."],
         },
-        "verification_evidence": [f"Demo CR record {vendor_id}", *[f"Demo institutional verification: {name}" for name in _institutional_verifications(index, institutional)]],
+        "eligibility_profile": {
+            "registration_state": "active_demo" if index % 9 != 8 else "under_review_demo",
+            "category_status": "approved_demo" if index % 6 else "limited_demo",
+            "government_procurement_status": "eligible_demo" if document_profile["etimad_registration"]["status"] == "verified_demo" else "limited_demo",
+            "revalidation_required": index % 9 == 8,
+            "revalidation_triggers": ["CR number", "legal name", "core activity/category"],
+        },
+        "verification_evidence": [f"Demo CR record {vendor_id}", *[f"Demo institutional verification: {record['institution']}" for record in institutional_records]],
         "delivery_history": {"completed_projects": completed_contracts, "on_time_percent": _round(delivery - 2 + (index % 4)), "quality_acceptance_percent": _round(delivery + 1), "open_corrective_actions": index % 3},
         "commercial_profile": {"average_contract_value_sar": 180_000 + (index % 10) * 145_000, "typical_bid_sar": typical_bid_sar, "financial_capacity_band": ["Standard", "Established", "Strategic"][index % 3]},
         "capability_evidence": {"key_roles": ["Project Manager", "Quality Lead", "Category Specialist"], "references_available": 2 + (index % 5), "service_coverage": ["Riyadh", "Jeddah", "Dammam"] if index % 2 == 0 else ["Riyadh", "Regional"]},
         "reputation_evidence": {"rating_count": 5 + index, "recent_rating_trend": ["improving", "stable", "watch"][index % 3], "dispute_summary": "No material unresolved demo dispute" if index % 4 else "One resolved demo dispute"},
-        "institutional_verifications": _institutional_verifications(index, institutional),
+        "institutional_verifications": [record["institution"] for record in institutional_records],
+        "institutional_verification_records": institutional_records,
+        "contract_history_records": _vendor_contract_history(index, vendor_id, categories, completed_contracts),
+        "rating_history": _vendor_rating_history(index, vendor_id, rating),
         "vri": {
             "overall": overall,
             "category_specific": category_specific,
             "level": _vri_level(category_specific),
             "components": components,
+            "score_version": "vri_demo_v1",
+            "data_status": DEMO_DATA_NOTICE,
         },
         "badge": _vendor_badge(rating, completed_contracts, compliance),
         "special_badges": _special_badges(index, delivery, compliance),
@@ -390,6 +573,15 @@ def _buyer_special_badges(index: int, payment: float, fairness: float) -> list[s
 def _adverse_vendor_profile() -> dict[str, Any]:
     """A deliberate negative demo case for explaining VRI and exclusion controls."""
     vendor = _base_vendor(29)
+    document_profile = _vendor_documents(30, "VND-031", ["Information Technology"])
+    document_profile["commercial_registration"]["status"] = "review_required_demo"
+    document_profile["commercial_registration"]["expires_on"] = "2025-12-31"
+    document_profile["vat_certificate"]["status"] = "expired_demo"
+    document_profile["vat_certificate"]["expires_on"] = "2025-09-30"
+    document_profile["national_address"]["status"] = "unverified_demo"
+    document_profile["national_address"]["expires_on"] = None
+    document_profile["saudization_certificate"]["status"] = "expired_demo"
+    document_profile["saudization_certificate"]["expires_on"] = "2025-03-31"
     components = {
         "performance_rating": 36.0,
         "compliance_and_licenses": 28.0,
@@ -407,6 +599,17 @@ def _adverse_vendor_profile() -> dict[str, Any]:
         "email": "vendor31@demo.mushtary.local",
         "status": "under_review",
         "city": "Riyadh",
+        "organization": {
+            "organization_id": "DEMO-ORG-VND-031",
+            "entity_type": "company_demo",
+            "legal_name_reference": "DEMO-LEGAL-NAME-VND-031",
+            "cr_number": "7990000031",
+            "cr_activities": ["Information Technology"],
+            "country": "Saudi Arabia",
+            "dual_role_enabled": False,
+            "role_contexts": ["vendor"],
+            "users": [{"user_id": "DEMO-VND-031-ADMIN", "role": "vendor_admin", "status": "restricted_demo"}],
+        },
         "categories": ["Information Technology"],
         "subcategories": ["IT Infrastructure & Data Centers"],
         "years_experience": 4,
@@ -418,11 +621,21 @@ def _adverse_vendor_profile() -> dict[str, Any]:
         "dispute_rate": 13.4,
         "rating": 2.7,
         "certifications": ["Commercial Registration"],
-        "document_profile": {
-            "commercial_registration": {"status": "review_required_demo", "expires_on": "2025-12-31"},
-            "vat_certificate": {"status": "expired_demo", "expires_on": "2025-09-30"},
-            "national_address": {"status": "unverified_demo", "expires_on": None},
-            "saudization_certificate": {"status": "expired_demo", "expires_on": "2025-03-31"},
+        "document_profile": document_profile,
+        "document_requirements_summary": {
+            "mandatory_status": "incomplete_demo",
+            "conditional_status": "expired_demo",
+            "sector_specific_status": document_profile["sector_license"]["status"],
+            "government_eligibility_status": "limited_demo",
+            "missing_documents": ["current national address"],
+            "review_flags": ["Synthetic adverse case: expired or unverified documents require human review."],
+        },
+        "eligibility_profile": {
+            "registration_state": "under_review_demo",
+            "category_status": "limited_demo",
+            "government_procurement_status": "not_eligible_demo",
+            "revalidation_required": True,
+            "revalidation_triggers": ["CR expiry", "VAT expiry", "national address", "Saudization certificate"],
         },
         "verification_evidence": ["Demo profile: verification evidence is incomplete.", "Demo profile: two document renewals are overdue."],
         "delivery_history": {"completed_projects": 3, "on_time_percent": 31.0, "quality_acceptance_percent": 42.0, "open_corrective_actions": 5},
@@ -430,6 +643,9 @@ def _adverse_vendor_profile() -> dict[str, Any]:
         "capability_evidence": {"key_roles": ["Interim Project Coordinator"], "references_available": 0, "service_coverage": ["Riyadh"]},
         "reputation_evidence": {"rating_count": 3, "recent_rating_trend": "declining", "dispute_summary": "Demo case: repeated delivery and documentation complaints remain unresolved."},
         "institutional_verifications": [],
+        "institutional_verification_records": [],
+        "contract_history_records": _vendor_contract_history(30, "VND-031", ["Information Technology"], 3),
+        "rating_history": _vendor_rating_history(30, "VND-031", 2.7),
         "vri": {"overall": vri, "category_specific": vri, "level": _vri_level(vri), "components": components},
         "badge": "Under Observation",
         "special_badges": ["Enhanced Due Diligence"],

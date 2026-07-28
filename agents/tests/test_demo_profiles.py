@@ -9,6 +9,29 @@ class TestDemoProfiles(unittest.TestCase):
         for key in ("document_profile", "verification_evidence", "delivery_history", "commercial_profile", "capability_evidence", "reputation_evidence", "vri"):
             self.assertIn(key, vendor)
 
+    def test_vendor_profiles_include_document_framework_demo_data(self):
+        vendor = list_vendors()[0]
+        for key in (
+            "organization",
+            "document_requirements_summary",
+            "eligibility_profile",
+            "institutional_verification_records",
+            "contract_history_records",
+            "rating_history",
+        ):
+            self.assertIn(key, vendor)
+        for document_type in (
+            "commercial_registration",
+            "authorized_signatory_id",
+            "iban_certificate",
+            "etimad_registration",
+            "sector_license",
+            "past_project_references",
+        ):
+            self.assertIn(document_type, vendor["document_profile"])
+        self.assertEqual(vendor["data_status"], "synthetic_demo_only")
+        self.assertEqual(vendor["document_profile"]["commercial_registration"]["verification_status"], "synthetic_demo_only")
+
     def test_buyer_profiles_include_bri_evidence(self):
         buyer = list_buyers()[0]
         for key in ("evaluation_evidence", "payment_evidence", "governance_evidence", "reputation_evidence", "bri"):
