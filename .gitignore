@@ -20,3 +20,5 @@ agents/rag/corpora/tender_kb/manifest.json
 # Editor / OS
 .DS_Store
 .claude/
+/agents
+/graphify-out
