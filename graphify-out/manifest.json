@@ -1,0 +1,806 @@
+{
+  "agents/__init__.py": {
+    "mtime": 1788972632.0338774,
+    "seen": 1789411296.2044954,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "agents/activity.py": {
+    "mtime": 1788972632.0338774,
+    "seen": 1789411296.2045033,
+    "ast_hash": "072fe23ad8990495b534ebd2c70b9646",
+    "semantic_hash": "072fe23ad8990495b534ebd2c70b9646"
+  },
+  "agents/artifact_store.py": {
+    "mtime": 1788972632.0338774,
+    "seen": 1789411296.2045066,
+    "ast_hash": "20db8c76ab00462ec1a32933ab67bbdf",
+    "semantic_hash": "20db8c76ab00462ec1a32933ab67bbdf"
+  },
+  "agents/base.py": {
+    "mtime": 1788972632.035883,
+    "seen": 1789411296.2045083,
+    "ast_hash": "97373ab3d6d74ae4f846f7e738c96b8b",
+    "semantic_hash": "97373ab3d6d74ae4f846f7e738c96b8b"
+  },
+  "agents/buyer_form.py": {
+    "mtime": 1788972632.035883,
+    "seen": 1789411296.2045105,
+    "ast_hash": "51debee5085353d4d3075aaf1e2472d6",
+    "semantic_hash": "51debee5085353d4d3075aaf1e2472d6"
+  },
+  "agents/categories.py": {
+    "mtime": 1788972632.0378914,
+    "seen": 1789411296.204512,
+    "ast_hash": "c80b1b6c42c17d675c4e703b826f396e",
+    "semantic_hash": "c80b1b6c42c17d675c4e703b826f396e"
+  },
+  "agents/document_requirements.py": {
+    "mtime": 1788972632.0378914,
+    "seen": 1789411296.2045138,
+    "ast_hash": "a4ea7085097dbea8d7985dcca9eeeb8e",
+    "semantic_hash": "a4ea7085097dbea8d7985dcca9eeeb8e"
+  },
+  "agents/evaluation/__init__.py": {
+    "mtime": 1788972632.039898,
+    "seen": 1789411296.2045152,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "agents/evaluation/agent.py": {
+    "mtime": 1788972632.0419054,
+    "seen": 1789411296.2045166,
+    "ast_hash": "1042b83bb843faee7d4f5d2621fdd730",
+    "semantic_hash": "1042b83bb843faee7d4f5d2621fdd730"
+  },
+  "agents/evaluation/graph.py": {
+    "mtime": 1788972632.0419054,
+    "seen": 1789411296.204518,
+    "ast_hash": "9652ef724481aef3e52476f34b907feb",
+    "semantic_hash": "9652ef724481aef3e52476f34b907feb"
+  },
+  "agents/evaluation/prompts.py": {
+    "mtime": 1788972632.0419054,
+    "seen": 1789411296.2045197,
+    "ast_hash": "83c1a7379ca6103ce30c30790b05238e",
+    "semantic_hash": "83c1a7379ca6103ce30c30790b05238e"
+  },
+  "agents/evaluation/schemas.py": {
+    "mtime": 1788972632.0439134,
+    "seen": 1789411296.2045214,
+    "ast_hash": "39c96665145ce61c4a5c9e46a111ed46",
+    "semantic_hash": "39c96665145ce61c4a5c9e46a111ed46"
+  },
+  "agents/example_buyer.py": {
+    "mtime": 1788972632.0439134,
+    "seen": 1789411296.204523,
+    "ast_hash": "e9e9d7836898092d33b368fe30e00299",
+    "semantic_hash": "e9e9d7836898092d33b368fe30e00299"
+  },
+  "agents/form_generator/__init__.py": {
+    "mtime": 1788972632.0439134,
+    "seen": 1789411296.2045245,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "agents/form_generator/agent.py": {
+    "mtime": 1788972632.0439134,
+    "seen": 1789411296.2045262,
+    "ast_hash": "03954c48524b8cb590d1bbee5bdf8723",
+    "semantic_hash": "03954c48524b8cb590d1bbee5bdf8723"
+  },
+  "agents/graph/__init__.py": {
+    "mtime": 1788972632.0439134,
+    "seen": 1789411296.2045276,
+    "ast_hash": "484781af6a42007a4fec818f798db326",
+    "semantic_hash": "484781af6a42007a4fec818f798db326"
+  },
+  "agents/graph/modes.py": {
+    "mtime": 1788972632.0439134,
+    "seen": 1789411296.204529,
+    "ast_hash": "7f373266d10e5dbaaee77f91a680da6a",
+    "semantic_hash": "7f373266d10e5dbaaee77f91a680da6a"
+  },
+  "agents/graph/pipeline.py": {
+    "mtime": 1788972632.0439134,
+    "seen": 1789411296.2045307,
+    "ast_hash": "1bcfe9ac956c697aa18ec11b8c6cb4ab",
+    "semantic_hash": "1bcfe9ac956c697aa18ec11b8c6cb4ab"
+  },
+  "agents/graph/state.py": {
+    "mtime": 1788972632.0515547,
+    "seen": 1789411296.2045321,
+    "ast_hash": "f0ca1d3083f6a694e2723b8808304f36",
+    "semantic_hash": "f0ca1d3083f6a694e2723b8808304f36"
+  },
+  "agents/guardrails.py": {
+    "mtime": 1788972632.0515547,
+    "seen": 1789411296.204534,
+    "ast_hash": "084d9b8dc7cdf248b337e00640ebcff4",
+    "semantic_hash": "084d9b8dc7cdf248b337e00640ebcff4"
+  },
+  "agents/llm_config.py": {
+    "mtime": 1788972632.0515547,
+    "seen": 1789411296.2045352,
+    "ast_hash": "53fdde4b799fcf76f00a0744e6b9456a",
+    "semantic_hash": "53fdde4b799fcf76f00a0744e6b9456a"
+  },
+  "agents/marketplace_store.py": {
+    "mtime": 1788972632.0515547,
+    "seen": 1789411296.2045372,
+    "ast_hash": "ce3aa14e0dab356f1289159185fb4c80",
+    "semantic_hash": "ce3aa14e0dab356f1289159185fb4c80"
+  },
+  "agents/observability.py": {
+    "mtime": 1788972632.0515547,
+    "seen": 1789411296.2045388,
+    "ast_hash": "e06fa9f9f065777e36298c1ee7a362ce",
+    "semantic_hash": "e06fa9f9f065777e36298c1ee7a362ce"
+  },
+  "agents/prompt_registry.py": {
+    "mtime": 1788972632.0515547,
+    "seen": 1789411296.2045414,
+    "ast_hash": "c6f6dc4d59154773a4f9be5f53299eda",
+    "semantic_hash": "c6f6dc4d59154773a4f9be5f53299eda"
+  },
+  "agents/prompts/__init__.py": {
+    "mtime": 1788972632.0515547,
+    "seen": 1789411296.204544,
+    "ast_hash": "ae986728c5ddee5a232c9e574c490631",
+    "semantic_hash": "ae986728c5ddee5a232c9e574c490631"
+  },
+  "agents/rag/__init__.py": {
+    "mtime": 1788972632.0727358,
+    "seen": 1789411296.2045462,
+    "ast_hash": "a72c281a6dd76fd83646ba62fe85fb88",
+    "semantic_hash": "a72c281a6dd76fd83646ba62fe85fb88"
+  },
+  "agents/rag/chunking.py": {
+    "mtime": 1788972632.0737355,
+    "seen": 1789411296.2045486,
+    "ast_hash": "c63a0e36092c4c1620e3f1d9b9813312",
+    "semantic_hash": "c63a0e36092c4c1620e3f1d9b9813312"
+  },
+  "agents/rag/config.py": {
+    "mtime": 1788972632.074734,
+    "seen": 1789411296.2045507,
+    "ast_hash": "2aab7677609daae7b5842d322486c235",
+    "semantic_hash": "2aab7677609daae7b5842d322486c235"
+  },
+  "agents/rag/embeddings.py": {
+    "mtime": 1788972632.079277,
+    "seen": 1789411296.2045531,
+    "ast_hash": "ef858bd796beb6eedf27215ce6913d0d",
+    "semantic_hash": "ef858bd796beb6eedf27215ce6913d0d"
+  },
+  "agents/rag/index_documents.py": {
+    "mtime": 1788972632.0827894,
+    "seen": 1789411296.204556,
+    "ast_hash": "f486471d2e6bb713318b39aa9af2b166",
+    "semantic_hash": "f486471d2e6bb713318b39aa9af2b166"
+  },
+  "agents/rag/knowledge_base.py": {
+    "mtime": 1788972632.0832949,
+    "seen": 1789411296.2045586,
+    "ast_hash": "474217cce795a339613f437533f97eb6",
+    "semantic_hash": "474217cce795a339613f437533f97eb6"
+  },
+  "agents/rag/schemas.py": {
+    "mtime": 1788972632.0843017,
+    "seen": 1789411296.204561,
+    "ast_hash": "de4eff630466d8bd3ee6391a1fe63b55",
+    "semantic_hash": "de4eff630466d8bd3ee6391a1fe63b55"
+  },
+  "agents/rag/sow_retrieval.py": {
+    "mtime": 1788972632.097546,
+    "seen": 1789411296.2045636,
+    "ast_hash": "fcd5ddbe7270a198d1d32a7e2de417c0",
+    "semantic_hash": "fcd5ddbe7270a198d1d32a7e2de417c0"
+  },
+  "agents/rag/store.py": {
+    "mtime": 1788972632.097546,
+    "seen": 1789411296.2045662,
+    "ast_hash": "a44b3574b534980a077c0d4426243ad7",
+    "semantic_hash": "a44b3574b534980a077c0d4426243ad7"
+  },
+  "agents/reputation/__init__.py": {
+    "mtime": 1788972632.099907,
+    "seen": 1789411296.2045686,
+    "ast_hash": "3f66acf1ecb2e36e4f93739ed7b19626",
+    "semantic_hash": "3f66acf1ecb2e36e4f93739ed7b19626"
+  },
+  "agents/reputation/engine.py": {
+    "mtime": 1788972632.100913,
+    "seen": 1789411296.2045715,
+    "ast_hash": "3472a92e1e7d805ffb0856da2543622d",
+    "semantic_hash": "3472a92e1e7d805ffb0856da2543622d"
+  },
+  "agents/samples/__init__.py": {
+    "mtime": 1788972632.102913,
+    "seen": 1789411296.204574,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "agents/samples/it_infrastructure_tender.json": {
+    "mtime": 1788972632.1043284,
+    "seen": 1789411296.2045767,
+    "ast_hash": "596fbd87389eeb1ec81a6a6614cec96f",
+    "semantic_hash": "596fbd87389eeb1ec81a6a6614cec96f"
+  },
+  "agents/samples/run_demo.py": {
+    "mtime": 1788972632.105235,
+    "seen": 1789411296.2045796,
+    "ast_hash": "809b97bc7c9fa6c9b2e46568fbc886d5",
+    "semantic_hash": "809b97bc7c9fa6c9b2e46568fbc886d5"
+  },
+  "agents/samples/test_form.py": {
+    "mtime": 1788972632.105235,
+    "seen": 1789411296.204581,
+    "ast_hash": "76c93189fb25f55f784e62a67dd205a7",
+    "semantic_hash": "76c93189fb25f55f784e62a67dd205a7"
+  },
+  "agents/samples/vendor_submissions.json": {
+    "mtime": 1788972632.105235,
+    "seen": 1789411296.2045827,
+    "ast_hash": "26b48263cdadd12c077f0dca35e1682f",
+    "semantic_hash": "26b48263cdadd12c077f0dca35e1682f"
+  },
+  "agents/sow_extractor/__init__.py": {
+    "mtime": 1788972632.105235,
+    "seen": 1789411296.2045844,
+    "ast_hash": "6756844148407a9f11ef6a34da15d734",
+    "semantic_hash": "6756844148407a9f11ef6a34da15d734"
+  },
+  "agents/sow_extractor/agent.py": {
+    "mtime": 1788972632.1094327,
+    "seen": 1789411296.204586,
+    "ast_hash": "8e2cc46b3f4fdcd9010b6e8b9371271a",
+    "semantic_hash": "8e2cc46b3f4fdcd9010b6e8b9371271a"
+  },
+  "agents/sow_extractor/prompts.py": {
+    "mtime": 1788972632.1094327,
+    "seen": 1789411296.2045882,
+    "ast_hash": "b79c3fac1383e16e89a3fa9105ba9e1d",
+    "semantic_hash": "b79c3fac1383e16e89a3fa9105ba9e1d"
+  },
+  "agents/sow_review/__init__.py": {
+    "mtime": 1788972632.1094327,
+    "seen": 1789411296.2045898,
+    "ast_hash": "0e2bb596249386979ad9ecce94548ba7",
+    "semantic_hash": "0e2bb596249386979ad9ecce94548ba7"
+  },
+  "agents/sow_review/agent.py": {
+    "mtime": 1788972632.1094327,
+    "seen": 1789411296.2045913,
+    "ast_hash": "e065235d90fe1827999ac75b86957637",
+    "semantic_hash": "e065235d90fe1827999ac75b86957637"
+  },
+  "agents/tasks.py": {
+    "mtime": 1788972632.1094327,
+    "seen": 1789411296.204593,
+    "ast_hash": "06907c105d4b8cc2ac4a4e7deb0453c2",
+    "semantic_hash": "06907c105d4b8cc2ac4a4e7deb0453c2"
+  },
+  "agents/tender_consistency.py": {
+    "mtime": 1788972632.1094327,
+    "seen": 1789411296.2045941,
+    "ast_hash": "eb8c4a4e72bd48419f444c25dedf2715",
+    "semantic_hash": "eb8c4a4e72bd48419f444c25dedf2715"
+  },
+  "agents/tender_drafting/__init__.py": {
+    "mtime": 1788972632.1094327,
+    "seen": 1789411296.2045958,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "agents/tender_drafting/agent.py": {
+    "mtime": 1788972632.1176,
+    "seen": 1789411296.2045972,
+    "ast_hash": "8e4c732da97c013bf9cff62e743d019c",
+    "semantic_hash": "8e4c732da97c013bf9cff62e743d019c"
+  },
+  "agents/tender_drafting/prompts.py": {
+    "mtime": 1788972632.1176,
+    "seen": 1789411296.2045987,
+    "ast_hash": "9a7bdd60baf594e1d77dfb29b574308f",
+    "semantic_hash": "9a7bdd60baf594e1d77dfb29b574308f"
+  },
+  "agents/tender_drafting/schemas.py": {
+    "mtime": 1788972632.1204908,
+    "seen": 1789411296.2046003,
+    "ast_hash": "3633b7edaf8af84af92f2ba705a2409f",
+    "semantic_hash": "3633b7edaf8af84af92f2ba705a2409f"
+  },
+  "agents/tender_drafting/sections/__init__.py": {
+    "mtime": 1788972632.1218717,
+    "seen": 1789411296.2046018,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "agents/tender_drafting/sections/base.py": {
+    "mtime": 1788972632.1218717,
+    "seen": 1789411296.2046034,
+    "ast_hash": "e02119f8ff2eac5d793a8af1fa5cb644",
+    "semantic_hash": "e02119f8ff2eac5d793a8af1fa5cb644"
+  },
+  "agents/tender_drafting/sections/context.py": {
+    "mtime": 1788972632.1218717,
+    "seen": 1789411296.2046046,
+    "ast_hash": "c082c0ecb6ef39657f612267593e5e61",
+    "semantic_hash": "c082c0ecb6ef39657f612267593e5e61"
+  },
+  "agents/tender_drafting/sections/execution.py": {
+    "mtime": 1788972632.1218717,
+    "seen": 1789411296.2046065,
+    "ast_hash": "ea8f43ad9ad209f88a4256ce7ce2eb36",
+    "semantic_hash": "ea8f43ad9ad209f88a4256ce7ce2eb36"
+  },
+  "agents/tender_drafting/sections/legal_eval.py": {
+    "mtime": 1788972632.1218717,
+    "seen": 1789411296.204608,
+    "ast_hash": "9b5818dff4dd62915838b09f25121d78",
+    "semantic_hash": "9b5818dff4dd62915838b09f25121d78"
+  },
+  "agents/tender_drafting/sections/scope.py": {
+    "mtime": 1788972632.1218717,
+    "seen": 1789411296.2046094,
+    "ast_hash": "631fd3012ae4718ef22688bf9f93a698",
+    "semantic_hash": "631fd3012ae4718ef22688bf9f93a698"
+  },
+  "agents/tender_ids.py": {
+    "mtime": 1788972632.1218717,
+    "seen": 1789411296.204611,
+    "ast_hash": "eb17c918797afd25fbdbd189a286488d",
+    "semantic_hash": "eb17c918797afd25fbdbd189a286488d"
+  },
+  "agents/tender_intelligence/__init__.py": {
+    "mtime": 1788972632.1218717,
+    "seen": 1789411296.2046123,
+    "ast_hash": "43e5ed8484675a0aa7ff6fbf05785ede",
+    "semantic_hash": "43e5ed8484675a0aa7ff6fbf05785ede"
+  },
+  "agents/tender_intelligence/health.py": {
+    "mtime": 1788972632.1315222,
+    "seen": 1789411296.2046142,
+    "ast_hash": "175cb17028f3930dcb19cad4f946f917",
+    "semantic_hash": "175cb17028f3930dcb19cad4f946f917"
+  },
+  "agents/tender_intelligence/schemas.py": {
+    "mtime": 1788972632.1315222,
+    "seen": 1789411296.2046156,
+    "ast_hash": "859022a6ee0d72e0201c46334d398dd6",
+    "semantic_hash": "859022a6ee0d72e0201c46334d398dd6"
+  },
+  "agents/tests/__init__.py": {
+    "mtime": 1788972632.1315222,
+    "seen": 1789411296.2046182,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "agents/tests/test_ai_input_security.py": {
+    "mtime": 1788972632.1315222,
+    "seen": 1789411296.2046206,
+    "ast_hash": "6a03da854889e6e6ef10400f7a971ac6",
+    "semantic_hash": "6a03da854889e6e6ef10400f7a971ac6"
+  },
+  "agents/tests/test_ai_observability.py": {
+    "mtime": 1788972632.1315222,
+    "seen": 1789411296.2046232,
+    "ast_hash": "d90f724026ee39d161f6799dca0df3b8",
+    "semantic_hash": "d90f724026ee39d161f6799dca0df3b8"
+  },
+  "agents/tests/test_demo_profiles.py": {
+    "mtime": 1788972632.1360002,
+    "seen": 1789411296.2046254,
+    "ast_hash": "b978d22a79d13ff8e2a5af637577a570",
+    "semantic_hash": "b978d22a79d13ff8e2a5af637577a570"
+  },
+  "agents/tests/test_evaluation_determinism.py": {
+    "mtime": 1788972632.1360002,
+    "seen": 1789411296.204628,
+    "ast_hash": "6872f11b1df09191a881da0d72d1a85d",
+    "semantic_hash": "6872f11b1df09191a881da0d72d1a85d"
+  },
+  "agents/tests/test_guardrails.py": {
+    "mtime": 1788972632.1360002,
+    "seen": 1789411296.2046304,
+    "ast_hash": "91d99065bea87a91644c45df46c71106",
+    "semantic_hash": "91d99065bea87a91644c45df46c71106"
+  },
+  "agents/tests/test_prompt_registry.py": {
+    "mtime": 1788972632.1360002,
+    "seen": 1789411296.2046323,
+    "ast_hash": "fcdb866de18cc4b0f71e70c9b8e752d1",
+    "semantic_hash": "fcdb866de18cc4b0f71e70c9b8e752d1"
+  },
+  "agents/tests/test_rag_failsafe.py": {
+    "mtime": 1788972632.1360002,
+    "seen": 1789411296.2046344,
+    "ast_hash": "5168c96a1ad80b8227536141c3c40b07",
+    "semantic_hash": "5168c96a1ad80b8227536141c3c40b07"
+  },
+  "agents/tests/test_sow_extraction_normalization.py": {
+    "mtime": 1788972632.1405807,
+    "seen": 1789411296.2046366,
+    "ast_hash": "e666b6ee19f5bd5b606a62e1753039da",
+    "semantic_hash": "e666b6ee19f5bd5b606a62e1753039da"
+  },
+  "agents/tests/test_tender_consistency.py": {
+    "mtime": 1788972632.1405807,
+    "seen": 1789411296.204639,
+    "ast_hash": "da3c02fe7aef5eaf19478f66d89ee44c",
+    "semantic_hash": "da3c02fe7aef5eaf19478f66d89ee44c"
+  },
+  "agents/vendor_committee/__init__.py": {
+    "mtime": 1788972632.1405807,
+    "seen": 1789411296.2046416,
+    "ast_hash": "c8956526df9fe6c540fbf9152a35a992",
+    "semantic_hash": "c8956526df9fe6c540fbf9152a35a992"
+  },
+  "agents/vendor_committee/graph.py": {
+    "mtime": 1788972632.1405807,
+    "seen": 1789411296.2046435,
+    "ast_hash": "49067f55e4eb656b70ace30bc158c584",
+    "semantic_hash": "49067f55e4eb656b70ace30bc158c584"
+  },
+  "agents/vendor_committee/schemas.py": {
+    "mtime": 1788972632.1405807,
+    "seen": 1789411296.2046459,
+    "ast_hash": "6e284f8673f96c267da567e37ecacc57",
+    "semantic_hash": "6e284f8673f96c267da567e37ecacc57"
+  },
+  "agents/vendor_validation/__init__.py": {
+    "mtime": 1788972632.1405807,
+    "seen": 1789411296.2046483,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "agents/vendor_validation/agent.py": {
+    "mtime": 1788972632.1405807,
+    "seen": 1789411296.204651,
+    "ast_hash": "9a8061f902a452b17849cddbbff44993",
+    "semantic_hash": "9a8061f902a452b17849cddbbff44993"
+  },
+  "agents/vendor_validation/prompts.py": {
+    "mtime": 1788972632.1405807,
+    "seen": 1789411296.2046535,
+    "ast_hash": "e30131b664edde08cd672daf362a4e3d",
+    "semantic_hash": "e30131b664edde08cd672daf362a4e3d"
+  },
+  "agents/vendor_validation/schemas.py": {
+    "mtime": 1788972632.1405807,
+    "seen": 1789411296.2046564,
+    "ast_hash": "7c7dea111a191561263a80924c610581",
+    "semantic_hash": "7c7dea111a191561263a80924c610581"
+  },
+  "agents/vendor_validation/stubs.py": {
+    "mtime": 1788972632.1405807,
+    "seen": 1789411296.2046587,
+    "ast_hash": "da92e04d37b4ef26166bcb85e15eda9f",
+    "semantic_hash": "da92e04d37b4ef26166bcb85e15eda9f"
+  },
+  "api.py": {
+    "mtime": 1788972632.1516747,
+    "seen": 1789411296.204661,
+    "ast_hash": "faac6030f88da89060aac7502d3e0130",
+    "semantic_hash": "faac6030f88da89060aac7502d3e0130"
+  },
+  "docs/generate_demo_presentation_guide.py": {
+    "mtime": 1788972632.1994078,
+    "seen": 1789411296.2046633,
+    "ast_hash": "15fef7fc5dade3fa407f290a3c9c7503",
+    "semantic_hash": "15fef7fc5dade3fa407f290a3c9c7503"
+  },
+  "frontend/app.js": {
+    "mtime": 1788972632.2428315,
+    "seen": 1789411296.2046657,
+    "ast_hash": "6f4feb5b6795517d39cd1dfa7880d819",
+    "semantic_hash": "6f4feb5b6795517d39cd1dfa7880d819"
+  },
+  "main.py": {
+    "mtime": 1788972632.2428315,
+    "seen": 1789411296.2046678,
+    "ast_hash": "0a1bac1fd40fdbc95f1fd9a0dff717b5",
+    "semantic_hash": "0a1bac1fd40fdbc95f1fd9a0dff717b5"
+  },
+  "pdf_renderer.py": {
+    "mtime": 1788972632.2490993,
+    "seen": 1789411296.2046707,
+    "ast_hash": "7234c3a1ede9867c432d630ad47a3956",
+    "semantic_hash": "7234c3a1ede9867c432d630ad47a3956"
+  },
+  "run.py": {
+    "mtime": 1788972632.2540581,
+    "seen": 1789411296.2046733,
+    "ast_hash": "db89760f530b8b8ea810a2a2e9dac333",
+    "semantic_hash": "db89760f530b8b8ea810a2a2e9dac333"
+  },
+  "PROJECT_MAP.md": {
+    "mtime": 1788972632.030113,
+    "seen": 1789411296.2046773,
+    "ast_hash": "f0caabac7ddf75e647d2d591fb63f134",
+    "semantic_hash": "f0caabac7ddf75e647d2d591fb63f134"
+  },
+  "README.md": {
+    "mtime": 1788972632.0316496,
+    "seen": 1789411296.2046797,
+    "ast_hash": "5c75a5f7d5f3ab8d61f2af5d4c6d6e02",
+    "semantic_hash": "5c75a5f7d5f3ab8d61f2af5d4c6d6e02"
+  },
+  "agents/prompts/drafting_context_narrative_system.md": {
+    "mtime": 1788972632.05702,
+    "seen": 1789411296.2046819,
+    "ast_hash": "baf1931dec788e6094dc71dacd2062e6",
+    "semantic_hash": "baf1931dec788e6094dc71dacd2062e6"
+  },
+  "agents/prompts/drafting_execution_system.md": {
+    "mtime": 1788972632.05702,
+    "seen": 1789411296.2046847,
+    "ast_hash": "c01588921ba61eaaa45fca1f11c3c575",
+    "semantic_hash": "c01588921ba61eaaa45fca1f11c3c575"
+  },
+  "agents/prompts/drafting_legacy_full_system.md": {
+    "mtime": 1788972632.0600562,
+    "seen": 1789411296.204687,
+    "ast_hash": "00b4d56e1aeff9b37989b13ddaa41b31",
+    "semantic_hash": "00b4d56e1aeff9b37989b13ddaa41b31"
+  },
+  "agents/prompts/drafting_legal_eval_system.md": {
+    "mtime": 1788972632.061579,
+    "seen": 1789411296.2046897,
+    "ast_hash": "f5c412f9df6450947de6254d38238145",
+    "semantic_hash": "f5c412f9df6450947de6254d38238145"
+  },
+  "agents/prompts/drafting_scope_system.md": {
+    "mtime": 1788972632.061579,
+    "seen": 1789411296.204692,
+    "ast_hash": "eb168fd6b514a8cd209dc25fc6fb410a",
+    "semantic_hash": "eb168fd6b514a8cd209dc25fc6fb410a"
+  },
+  "agents/prompts/evaluation_ranking_system.md": {
+    "mtime": 1788972632.061579,
+    "seen": 1789411296.2046945,
+    "ast_hash": "6c9fc69290b8889c496f22a8c7da8f1f",
+    "semantic_hash": "6c9fc69290b8889c496f22a8c7da8f1f"
+  },
+  "agents/prompts/evaluation_scoring_system.md": {
+    "mtime": 1788972632.061579,
+    "seen": 1789411296.204697,
+    "ast_hash": "dab4e549d607abc2c4ba11274f8e14d0",
+    "semantic_hash": "dab4e549d607abc2c4ba11274f8e14d0"
+  },
+  "agents/prompts/form_generator_system.md": {
+    "mtime": 1788972632.061579,
+    "seen": 1789411296.2046988,
+    "ast_hash": "d67108a25445190c114d8b4dab8af88f",
+    "semantic_hash": "d67108a25445190c114d8b4dab8af88f"
+  },
+  "agents/prompts/sow_extractor_system.md": {
+    "mtime": 1788972632.061579,
+    "seen": 1789411296.2047014,
+    "ast_hash": "dd1bce68e6d7c67b101650227878135c",
+    "semantic_hash": "dd1bce68e6d7c67b101650227878135c"
+  },
+  "agents/prompts/tender_health_aggregator_system.md": {
+    "mtime": 1788972632.061579,
+    "seen": 1789411296.2047036,
+    "ast_hash": "ee2c2e277d1f158adb5a8714c1993978",
+    "semantic_hash": "ee2c2e277d1f158adb5a8714c1993978"
+  },
+  "agents/prompts/tender_health_commercial_system.md": {
+    "mtime": 1788972632.0671222,
+    "seen": 1789411296.2047055,
+    "ast_hash": "b481a44d8de8208908103076a77c042d",
+    "semantic_hash": "b481a44d8de8208908103076a77c042d"
+  },
+  "agents/prompts/tender_health_compliance_system.md": {
+    "mtime": 1788972632.0671222,
+    "seen": 1789411296.204708,
+    "ast_hash": "f8a8a9a9053d62a986843c03a0b32730",
+    "semantic_hash": "f8a8a9a9053d62a986843c03a0b32730"
+  },
+  "agents/prompts/tender_health_participation_system.md": {
+    "mtime": 1788972632.0671222,
+    "seen": 1789411296.20471,
+    "ast_hash": "1c9f35e9e5f5359f1c5bb45cb0793b3a",
+    "semantic_hash": "1c9f35e9e5f5359f1c5bb45cb0793b3a"
+  },
+  "agents/prompts/tender_health_scope_system.md": {
+    "mtime": 1788972632.0671222,
+    "seen": 1789411296.2047126,
+    "ast_hash": "a5ec1d42aad261e3fa7d4f5416accdf1",
+    "semantic_hash": "a5ec1d42aad261e3fa7d4f5416accdf1"
+  },
+  "agents/prompts/tender_revision_system.md": {
+    "mtime": 1788972632.0700502,
+    "seen": 1789411296.2047145,
+    "ast_hash": "3446a0d91637a43b314c3a126a64bfb7",
+    "semantic_hash": "3446a0d91637a43b314c3a126a64bfb7"
+  },
+  "agents/prompts/vendor_validation_system.md": {
+    "mtime": 1788972632.071725,
+    "seen": 1789411296.2047164,
+    "ast_hash": "5328a5592bde707848ff17b937773082",
+    "semantic_hash": "5328a5592bde707848ff17b937773082"
+  },
+  "agents/rag/corpora/tender_kb/README.md": {
+    "mtime": 1788972632.0770946,
+    "seen": 1789411296.2047188,
+    "ast_hash": "3b6495e074f6cf423e6eabd1f7a75d31",
+    "semantic_hash": "3b6495e074f6cf423e6eabd1f7a75d31"
+  },
+  "agents/rag/sources/README.md": {
+    "mtime": 1788972632.0858078,
+    "seen": 1789411296.2047212,
+    "ast_hash": "7c78d0e7b380ffad191173bc94743722",
+    "semantic_hash": "7c78d0e7b380ffad191173bc94743722"
+  },
+  "agents/rag/sources/clauses/01_governing_law_and_general.md": {
+    "mtime": 1788972632.0868156,
+    "seen": 1789411296.2047234,
+    "ast_hash": "258fd3503d841c2867428b42b4fe06fb",
+    "semantic_hash": "258fd3503d841c2867428b42b4fe06fb"
+  },
+  "agents/rag/sources/clauses/02_confidentiality.md": {
+    "mtime": 1788972632.0868156,
+    "seen": 1789411296.204726,
+    "ast_hash": "1fd77dbdf9a0c9b76fc3caf08e9990c7",
+    "semantic_hash": "1fd77dbdf9a0c9b76fc3caf08e9990c7"
+  },
+  "agents/rag/sources/clauses/03_evaluation_methodology.md": {
+    "mtime": 1788972632.0882072,
+    "seen": 1789411296.2047284,
+    "ast_hash": "2dfd685b7f71fb593778015b83dd077a",
+    "semantic_hash": "2dfd685b7f71fb593778015b83dd077a"
+  },
+  "agents/rag/sources/clauses/04_payment_terms.md": {
+    "mtime": 1788972632.0916455,
+    "seen": 1789411296.2047305,
+    "ast_hash": "0e89e8a17fbdfdef8d05c86532094aaa",
+    "semantic_hash": "0e89e8a17fbdfdef8d05c86532094aaa"
+  },
+  "agents/rag/sources/clauses/05_bid_security_and_bonds.md": {
+    "mtime": 1788972632.0916455,
+    "seen": 1789411296.204733,
+    "ast_hash": "98245e80c9e2dc7e6b316247a0ac97a8",
+    "semantic_hash": "98245e80c9e2dc7e6b316247a0ac97a8"
+  },
+  "agents/rag/sources/clauses/06_liquidated_damages_and_penalties.md": {
+    "mtime": 1788972632.092309,
+    "seen": 1789411296.2047355,
+    "ast_hash": "9fa579ca1525703ce00c7dd92753c782",
+    "semantic_hash": "9fa579ca1525703ce00c7dd92753c782"
+  },
+  "agents/rag/sources/clauses/07_eligibility_and_qualifications.md": {
+    "mtime": 1788972632.092309,
+    "seen": 1789411296.2047381,
+    "ast_hash": "82e689d7596edcb950dbdf3fe69acebf",
+    "semantic_hash": "82e689d7596edcb950dbdf3fe69acebf"
+  },
+  "agents/rag/sources/clauses/08_submission_and_award.md": {
+    "mtime": 1788972632.0953455,
+    "seen": 1789411296.2047405,
+    "ast_hash": "d82d12f7265b1a3d517f329d5c6bdb02",
+    "semantic_hash": "d82d12f7265b1a3d517f329d5c6bdb02"
+  },
+  "agents/rag/sources/clauses/09_warranty_delivery_and_acceptance.md": {
+    "mtime": 1788972632.0953455,
+    "seen": 1789411296.204743,
+    "ast_hash": "dce1df0eb4deb754369053ad3b9523c1",
+    "semantic_hash": "dce1df0eb4deb754369053ad3b9523c1"
+  },
+  "agents/rag/sources/clauses/10_compliance_localization_and_conduct.md": {
+    "mtime": 1788972632.0964866,
+    "seen": 1789411296.2047453,
+    "ast_hash": "00118d606c239e4b8d75844f2bd22a7d",
+    "semantic_hash": "00118d606c239e4b8d75844f2bd22a7d"
+  },
+  "agents/requirements.txt": {
+    "mtime": 1788972632.1019125,
+    "seen": 1789411296.2047474,
+    "ast_hash": "8d5f9561662fe029eb2a2ed04b811b63",
+    "semantic_hash": "8d5f9561662fe029eb2a2ed04b811b63"
+  },
+  "docs/AI_OPERATIONS.md": {
+    "mtime": 1788972632.168323,
+    "seen": 1789411296.2047503,
+    "ast_hash": "895cd200f311a068a0d1c717828b503f",
+    "semantic_hash": "895cd200f311a068a0d1c717828b503f"
+  },
+  "docs/ARCHITECTURE.md": {
+    "mtime": 1788972632.168323,
+    "seen": 1789411296.2047534,
+    "ast_hash": "9dce472325ae750bca4508e15de1fc9f",
+    "semantic_hash": "9dce472325ae750bca4508e15de1fc9f"
+  },
+  "docs/PROJECT_GUIDE.md": {
+    "mtime": 1788972632.181442,
+    "seen": 1789411296.2047555,
+    "ast_hash": "d3347b3427396141284926cdb5b5b79d",
+    "semantic_hash": "d3347b3427396141284926cdb5b5b79d"
+  },
+  "docs/README.md": {
+    "mtime": 1788972632.181442,
+    "seen": 1789411296.204758,
+    "ast_hash": "5de44ba42b6788ff5ae77eb82c885654",
+    "semantic_hash": "5de44ba42b6788ff5ae77eb82c885654"
+  },
+  "documentation/AI_BACKEND_WEB_INTEGRATION.md": {
+    "mtime": 1788972632.2331443,
+    "seen": 1789411296.2047606,
+    "ast_hash": "1c54672d2df144d16bafd06005209149",
+    "semantic_hash": "1c54672d2df144d16bafd06005209149"
+  },
+  "documentation/AI_PROJECT_REFERENCE.md": {
+    "mtime": 1788972632.2331443,
+    "seen": 1789411296.2047632,
+    "ast_hash": "279f4b56e4db22ea63081a28e5d3b08a",
+    "semantic_hash": "279f4b56e4db22ea63081a28e5d3b08a"
+  },
+  "frontend/index.html": {
+    "mtime": 1788972632.2428315,
+    "seen": 1789411296.2047656,
+    "ast_hash": "233b09dbff891f1f953c77e0d99668d5",
+    "semantic_hash": "233b09dbff891f1f953c77e0d99668d5"
+  },
+  "docs/149.2024 - SEVEN's in attractions FB RFP.pdf": {
+    "mtime": 1788972632.168323,
+    "seen": 1789411296.2047677,
+    "ast_hash": "5ccda5ed31d919cc3f039d6d5c1b3ae8",
+    "semantic_hash": "5ccda5ed31d919cc3f039d6d5c1b3ae8"
+  },
+  "docs/Government_Tenders_and_Procurement_Law.pdf": {
+    "mtime": 1788972632.172958,
+    "seen": 1789411296.2047703,
+    "ast_hash": "acf235f0a7747a7c6fdff4375fd59f19",
+    "semantic_hash": "acf235f0a7747a7c6fdff4375fd59f19"
+  },
+  "docs/Mushtary_Demo_Presentation_Guide.pdf": {
+    "mtime": 1788972632.172958,
+    "seen": 1789411296.2047727,
+    "ast_hash": "6e2fa163557ca26d0606011def6c5e64",
+    "semantic_hash": "6e2fa163557ca26d0606011def6c5e64"
+  },
+  "docs/RFPF-Food Supply Riyadh Season-Aug'24-1.pdf": {
+    "mtime": 1788972632.1836352,
+    "seen": 1789411296.2047853,
+    "ast_hash": "48b251e3809079df31e762cd9b1ca43d",
+    "semantic_hash": "48b251e3809079df31e762cd9b1ca43d"
+  },
+  "docs/RFPF-Food Supply Riyadh Season-Aug'24.pdf": {
+    "mtime": 1788972632.1858413,
+    "seen": 1789411296.2047877,
+    "ast_hash": "48b251e3809079df31e762cd9b1ca43d",
+    "semantic_hash": "48b251e3809079df31e762cd9b1ca43d"
+  },
+  "docs/RFP_Culture & Engagement.pdf": {
+    "mtime": 1788972632.1911426,
+    "seen": 1789411296.2047906,
+    "ast_hash": "0197ebf8d84ffe20b89e12b5471e091c",
+    "semantic_hash": "0197ebf8d84ffe20b89e12b5471e091c"
+  },
+  "docs/tender_draft 1.pdf": {
+    "mtime": 1788972632.221282,
+    "seen": 1789411296.204793,
+    "ast_hash": "669f52f54978da6699d9ef1daf3f1d10",
+    "semantic_hash": "669f52f54978da6699d9ef1daf3f1d10"
+  },
+  "docs/\u062a\u0642\u062f\u064a\u0645 \u062e\u062f\u0645\u0627\u062a \u0625\u0639\u0627\u0634\u0629 - SCA-08'Aug'24.pdf": {
+    "mtime": 1788972632.2286358,
+    "seen": 1789411296.204798,
+    "ast_hash": "0e631a3cd407df6142a11513958479e5",
+    "semantic_hash": "0e631a3cd407df6142a11513958479e5"
+  },
+  "docs/\u0643\u0631\u0627\u0633\u0629 \u0627\u0644\u0634\u0631\u0648\u0637 \u0648\u0627\u0644\u0645\u0648\u0627\u0635\u0641\u0627\u062a.pdf": {
+    "mtime": 1788972632.2331443,
+    "seen": 1789411296.2048018,
+    "ast_hash": "89423600ccd97e96de98f00aa0196c2b",
+    "semantic_hash": "89423600ccd97e96de98f00aa0196c2b"
+  },
+  "assets/backgrounds/tropical_resort_hospitality.png": {
+    "mtime": 1788972632.1625433,
+    "seen": 1789411296.2048042,
+    "ast_hash": "543dbb003897d1815752d817f9a13dde",
+    "semantic_hash": "543dbb003897d1815752d817f9a13dde"
+  }
+}
